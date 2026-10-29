@@ -931,7 +931,7 @@ const Sync={
     await DB.replace('formas',(j.formas||[]).map(f=>({id:String(f.id),nome:f.nome,troco:!!f.troco||/dinheiro/i.test(f.nome),padraoPdv:/dinheiro|cr[eé]dito|d[eé]bito|pix/i.test(f.nome)})));
     await DB.replace('listas',(j.listas||[]).map(l=>({id:String(l.id),nome:l.nome,precos:l.precos||{}})));
     await DB.replace('vendedores',(j.vendedores||[]).map(v=>({id:String(v.id),nome:v.nome})));
-    await DB.put('meta',{id:'sync',v:{em:new Date().toISOString(),demo:false}});
+    await DB.put('meta',{id:'sync',v:{em:new Date().toISOString(),demo:false,versao:j.versao||''}});
     await loadCat();return prods.length;
   },
   async enviar(){
@@ -967,6 +967,15 @@ async function updateQueue(){
 }
 addEventListener('online',()=>{updateQueue();Sync.enviar()});addEventListener('offline',updateQueue);
 setInterval(()=>Sync.enviar(),30000);
+/* a cada 1 minuto pergunta à ponte se o catálogo do Bling mudou; se mudou, baixa sozinho (fora da tela de pagamento) */
+Sync.checar=async function(){
+  if(!CFG.url||!navigator.onLine||this.checando)return;const pg=document.getElementById('s-pagamento');if(pg&&!pg.hidden)return;
+  this.checando=true;
+  try{const j=await this.req('versao');const m=await DB.get('meta','sync');const atual=m&&m.v&&m.v.versao;
+    if(j.versao&&j.versao!==atual){await this.catalogo();toast('Produtos e preços atualizados do Bling')}}
+  catch(e){}finally{this.checando=false}
+};
+setInterval(()=>Sync.checar(),60000);
 
 /* ================= últimas vendas ================= */
 const statusTxt=s=>({pendente:'Aguardando envio',enviada:'No Bling',erro:'Com erro',cancelada:'Cancelada',demo:'Demonstração'}[s]||s);
