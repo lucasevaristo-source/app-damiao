@@ -512,7 +512,7 @@ function detalhePedido(p,equipe,onChange){
 const GESTAO=()=>ME&&(ME.papel==='master'||ME.papel==='admin');
 let VIEW='dashboard';
 function iniciarPainel(){
-  const MOT=ME.papel==='motorista';if(MOT)VIEW='rotas';
+  if(ME.papel==='caixa'){location.href='/pdv/';return}const MOT=ME.papel==='motorista';if(MOT)VIEW='rotas';
   const itens=MOT?[['rotas','Minhas rotas',ICON.rota]]:[['dashboard','Dashboard',ICON.dash],['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes',ME.papel==='vendedor'?'Meus clientes':'Clientes',ICON.cli],['produtos','Produtos',ICON.prod]]
     .concat(GESTAO()?[['rotas','Rotas e entregas',ICON.rota],['tabelas','Tabelas de preço',ICON.tab],['usuarios','Usuários',ICON.usr],['config','Configurações',ICON.cfg]]:[]);
   $('#root').innerHTML=`<div class="mtop"><button id="mmenu" aria-label="Menu">${ICON.menu}</button><img src="${LOGO}" alt="Damião"><b style="font-family:var(--fd)" id="mtit"></b></div>
@@ -717,7 +717,7 @@ async function vUsuarios(){
   const ed=u=>{const n=!u;u=u||{papel:'vendedor',ativo:'sim'};const master=ME.papel==='master';
     const m=modal(`<header><h3>${n?'Novo usuário':esc(u.nome)}</h3><button data-fechar>×</button></header><div class="body"><div class="grid2">
      <div class="field"><label for="u1">Nome</label><input id="u1" value="${esc(u.nome||'')}"></div><div class="field"><label for="u2">E-mail (login)</label><input id="u2" type="email" value="${esc(u.email||'')}"></div>
-     <div class="field"><label for="u3">Perfil</label><select id="u3" ${u.papel==='master'?'disabled':''}>${[['vendedor','Vendedor'],['motorista','Motorista'],['admin','Administrador geral']].concat(u.papel==='master'?[['master','Master']]:[]).filter(([k])=>master||k==='vendedor'||k==='motorista'||k===u.papel).map(([k,l])=>`<option value="${k}" ${k===u.papel?'selected':''}>${l}</option>`).join('')}</select></div>
+     <div class="field"><label for="u3">Perfil</label><select id="u3" ${u.papel==='master'?'disabled':''}>${[['vendedor','Vendedor'],['motorista','Motorista'],['caixa','Operador de caixa'],['admin','Administrador geral']].concat(u.papel==='master'?[['master','Master']]:[]).filter(([k])=>master||k==='vendedor'||k==='motorista'||k===u.papel).map(([k,l])=>`<option value="${k}" ${k===u.papel?'selected':''}>${l}</option>`).join('')}</select></div>
      <div class="field"><label for="u4">Vendedor no Bling</label><select id="u4"><option value="">— Nenhum —</option>${vb.map(v=>`<option value="${v.id}" ${String(v.id)===String(u.blingVendedorId)?'selected':''}>${esc(v.nome)}</option>`).join('')}</select></div>
      <div class="field"><label for="u5">${n?'Senha (deixe vazio para gerar)':'Nova senha (opcional)'}</label><input id="u5" type="password" autocomplete="new-password"></div>
      ${!n&&u.papel!=='master'?`<div class="field"><label for="u6">Situação</label><select id="u6"><option value="sim" ${u.ativo==='sim'?'selected':''}>Ativo</option><option value="nao" ${u.ativo!=='sim'?'selected':''}>Inativo</option></select></div>`:''}
