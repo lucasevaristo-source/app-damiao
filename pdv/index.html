@@ -343,7 +343,7 @@ table.list{width:100%;border-collapse:collapse}
 </style>
 <link rel="stylesheet" href="caixa.css">
 </head><body class="pdv-locked">
-<div id="pdvLogin"><form id="pdvEntrarForm"><h1>PDV Damião</h1><p>Entre com sua conta de operador para acessar o caixa.</p><label for="pdvEmail">E-mail</label><input id="pdvEmail" type="email" autocomplete="username" required><label for="pdvSenha">Senha</label><input id="pdvSenha" type="password" autocomplete="current-password" required><p id="pdvLoginErro" role="alert"></p><button id="pdvEntrar" type="submit">Entrar no PDV</button><p>O Master e os administradores cadastram operadores em Usuários no App Damião.</p><p><a href="https://paesdamiao.com.br/" target="_blank" rel="noopener">Minha conta / recuperação de senha</a></p></form></div>
+<div id="pdvLogin"><form id="pdvEntrarForm"><h1>PDV Damião</h1><p>Entre com sua conta de operador para acessar o caixa.</p><label for="pdvEmail">Usuário ou e-mail</label><input id="pdvEmail" type="text" autocomplete="username" required><label for="pdvSenha">Senha</label><input id="pdvSenha" type="password" autocomplete="current-password" required><p id="pdvLoginErro" role="alert"></p><button id="pdvEntrar" type="submit">Entrar no PDV</button><p>O Master e os administradores cadastram operadores em Usuários no App Damião.</p><p><a href="https://paesdamiao.com.br/" target="_blank" rel="noopener">Minha conta / recuperação de senha</a></p></form></div>
 
 <div class="app">
   <div class="topbar">
@@ -617,7 +617,7 @@ function precoDe(p){
 /* ================= telas ================= */
 const TITLES={inicio:'Início',balcao:'Balcão',pagamento:'Pagamento',vendas:'Últimas vendas',caixa:'Caixa do dia',ajustes:'Configurações'};
 function go(s){
-  if(s==='ajustes'&&!PdvCaixa.admin()){toast('Somente o Master ou administrador pode alterar configurações.');return;}
+  if(s==='ajustes'&&!PdvCaixa.admin()){toast('Somente o Master pode alterar configurações.');return;}
   if((s==='balcao'||s==='pagamento')&&!PdvCaixa.podeVender())return;
   if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
   screen=s;$$('.screen').forEach(x=>x.hidden=x.id!=='s-'+s);
@@ -878,6 +878,7 @@ function receiptHTML(v){
 }
 let shown=null;
 function showReceipt(v,isNew){
+  if(!v||!PdvCaixa.diaPermitido(v.dia)){toast('Seu acesso permite somente vendas de hoje.');return;}
   shown=v;$('#rcTitle').textContent=isNew?'Venda finalizada':'Venda '+v.numero;
   $('#rcSub').textContent=isNew?(v.troco?'Troco '+R$(v.troco):''):statusTxt(v.status);
   $('#rcPaper').innerHTML=receiptHTML(v);openModal('#mRecibo');$('#rcNew').textContent=isNew?'Nova venda (Enter)':'Fechar';$('#rcNew').focus();
@@ -949,10 +950,10 @@ const Sync={
   async enviar(){
     if(this.busy||!CFG.url||!navigator.onLine||!PdvCaixa.autenticado)return;this.busy=true;
     try{
-      const pend=(await DB.all('vendas')).filter(v=>v.status==='pendente'||(v.status==='erro'&&v.tentativas<20)).sort((a,b)=>a.criadaEm.localeCompare(b.criadaEm));
+      const pend=(await DB.all('vendas')).filter(v=>v.caixaSessaoId&&(v.status==='pendente'||(v.status==='erro'&&v.tentativas<20))).sort((a,b)=>a.criadaEm.localeCompare(b.criadaEm));
       for(const v of pend){
         try{
-          const j=await this.req('venda',{venda:{id:v.id,caixaSessaoId:v.caixaSessaoId,caixa:v.caixa,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
+          const j=await this.req('venda',{venda:{id:v.id,caixaSessaoId:v.caixaSessaoId,anteriorAoCaixa:!!v.anteriorAoCaixa,operadorOriginal:v.operadorOriginal,caixa:v.caixa,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
             itens:v.itens.map(i=>({produtoId:i.produtoId,codigo:i.codigo,nome:i.nome,unidade:i.unidade,qtd:i.qtd,valor:i.preco/100,precoOriginal:(i.precoOriginal??i.preco)/100,descontoPct:i.descPct||0})),
             desconto:(v.subtotal-v.total)/100,total:v.total/100,pagamentos:v.pagamentos.map(p=>({formaId:p.formaId,valor:p.valorLiquido/100})),fiscal:v.fiscal.modo}});
           v.status='enviada';v.erro='';v.bling={pedidoId:j.pedidoId,numero:j.numero};
@@ -992,9 +993,10 @@ setInterval(()=>Sync.checar(),60000);
 /* ================= últimas vendas ================= */
 const statusTxt=s=>({pendente:'Aguardando envio',enviada:'No Bling',erro:'Com erro',cancelada:'Cancelada',demo:'Demonstração'}[s]||s);
 async function renderVendas(){
+  $('#fData').disabled=!PdvCaixa.admin();if(!PdvCaixa.admin())$('#fData').value=today();
   if(!$('#fData').value)$('#fData').value=today();
   const d=$('#fData').value,st=$('#fStatus').value;
-  const vs=(await DB.all('vendas')).filter(v=>(!d||v.dia===d)&&(!st||v.status===st)).sort((a,b)=>b.criadaEm.localeCompare(a.criadaEm));
+  const vs=(await DB.all('vendas')).filter(v=>PdvCaixa.diaPermitido(v.dia)&&(!d||v.dia===d)&&(!st||v.status===st)).sort((a,b)=>b.criadaEm.localeCompare(a.criadaEm));
   $('#tVendas').innerHTML='<thead><tr><th>Venda</th><th>Hora</th><th>Cliente</th><th>Pagamento</th><th class="r">Total</th><th>Situação</th><th></th></tr></thead><tbody>'+
    (vs.map(v=>`<tr><td class="num">${esc(v.numero)}</td><td class="num">${new Date(v.criadaEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td>
    <td>${esc(v.cliente?(v.cliente.fantasia||v.cliente.nome):'Consumidor final')}</td><td>${esc(v.pagamentos.map(p=>p.nome).join(' + '))}</td>
@@ -1007,17 +1009,20 @@ $('#tVendas').addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.ver)showReceipt(await DB.get('vendas',b.dataset.ver),false);
   if(b.dataset.canc){const v=await DB.get('vendas',b.dataset.canc);
+    if(!v||!PdvCaixa.diaPermitido(v.dia)){toast('Seu acesso permite somente vendas de hoje.');return;}
     confirmar('Cancelar a venda '+v.numero+' ('+R$(v.total)+')?',async()=>{const x=await DB.get('vendas',v.id);if(x.status==='enviada'){toast('Já está no Bling. Cancele por lá.');return}
       x.status='cancelada';await DB.put('vendas',x);updateQueue();renderVendas();toast('Venda '+x.numero+' cancelada')})}
 });
 
 /* ================= caixa do dia ================= */
 async function caixaDados(d){
+  if(!PdvCaixa.diaPermitido(d))throw Error('Somente o Master pode consultar outros dias.');
   const all=await DB.all('vendas');const vs=all.filter(v=>v.dia===d&&v.status!=='cancelada');
   const por={};vs.forEach(v=>v.pagamentos.forEach(p=>{por[p.nome]=por[p.nome]||{n:0,v:0};por[p.nome].n++;por[p.nome].v+=p.valorLiquido}));
   return{vs,por,canc:all.filter(v=>v.dia===d&&v.status==='cancelada').length,tot:vs.reduce((s,v)=>s+v.total,0),desc:vs.reduce((s,v)=>s+v.desconto,0)};
 }
 async function renderCaixa(){
+  $('#cData').disabled=!PdvCaixa.admin();if(!PdvCaixa.admin())$('#cData').value=today();
   if(!$('#cData').value)$('#cData').value=today();
   const c=await caixaDados($('#cData').value);const tm=c.vs.length?Math.round(c.tot/c.vs.length):0;
   $('#kpis').innerHTML=[['Total vendido',R$(c.tot),'var(--blue)'],['Vendas',c.vs.length,'var(--bar)'],['Ticket médio',R$(tm),'#1e40af'],['Descontos',R$(c.desc),'#3b5bab']]
@@ -1039,6 +1044,7 @@ async function imprimirFechamento(d){
 
 /* ================= configurações ================= */
 async function renderAjustes(){
+  if(!PdvCaixa.admin()){toast('Somente o Master pode alterar configurações.');return;}
   $('#cfUrl').value=CFG.url;$('#cfTok').value=CFG.token;$('#cfCaixa').value=CFG.caixa;$('#cfOper').value=CFG.operador;
   $('#cfAuto').checked=CFG.autoPrint;$('#cfSom').checked=CFG.som;$('#cfCab').value=CFG.cabecalho;$('#cfRod').value=CFG.rodape;$('#cfFiscal').value=CFG.fiscal;
   renderFormas();
@@ -1046,14 +1052,14 @@ async function renderAjustes(){
   const s=await DB.get('meta','sync');const vs=await DB.all('vendas');
   $('#dbInfo').innerHTML=`${CAT.produtos.length} produtos, ${CAT.clientes.length} clientes e ${CAT.formas.length} formas de pagamento guardados.<br>${s?(s.v.demo?'Dados de exemplo carregados em ':'Última atualização do Bling: ')+dtBR(s.v.em):'Nada baixado ainda.'}<br>${vs.length} vendas registradas neste aparelho.`;
 }
-const bindCfg=(id,key,f=x=>x.value)=>$(id).addEventListener('change',async e=>{CFG[key]=f(e.target);await saveCfg();if(key==='url')updateDemoBar();if(key==='operador'){CFG.vendedorId='';await saveCfg();renderNames()}toast('Configuração salva')});
+const bindCfg=(id,key,f=x=>x.value)=>$(id).addEventListener('change',async e=>{if(!PdvCaixa.admin()){toast('Somente o Master altera configurações.');return;}CFG[key]=f(e.target);await saveCfg();if(key==='url')updateDemoBar();if(key==='operador'){CFG.vendedorId='';await saveCfg();renderNames()}toast('Configuração salva')});
 bindCfg('#cfUrl','url',x=>x.value.trim());bindCfg('#cfTok','token',x=>x.value.trim());bindCfg('#cfCaixa','caixa',x=>x.value.trim().toUpperCase()||'CX1');bindCfg('#cfOper','operador',x=>x.value.trim());
 bindCfg('#cfAuto','autoPrint',x=>x.checked);bindCfg('#cfSom','som',x=>x.checked);bindCfg('#cfCab','cabecalho');bindCfg('#cfRod','rodape');bindCfg('#cfFiscal','fiscal');
-$('#cfFormas').addEventListener('change',async()=>{CFG.formasAtivas=$$('#cfFormas input:checked').map(i=>i.value);await saveCfg();renderFormas();toast('Formas de pagamento atualizadas')});
+$('#cfFormas').addEventListener('change',async()=>{if(!PdvCaixa.admin())return;CFG.formasAtivas=$$('#cfFormas input:checked').map(i=>i.value);await saveCfg();renderFormas();toast('Formas de pagamento atualizadas')});
 $('#btnSync').onclick=async()=>{const m=$('#syncMsg');m.className='hint';m.textContent='Baixando do Bling...';
   try{const n=await Sync.catalogo();m.className='msg ok';m.textContent=n+' produtos, '+CAT.clientes.length+' clientes e '+CAT.formas.length+' formas de pagamento atualizados.';updateDemoBar();renderAjustes()}
   catch(e){m.className='msg bad';m.textContent='Não consegui baixar: '+(e.message||e)+'. Confira o endereço, a chave e a internet.'}};
-$('#btnDemo').onclick=async()=>{await seedDemo(true);await loadCat();renderAjustes();toast('Dados de exemplo carregados')};
+$('#btnDemo').onclick=async()=>{if(!PdvCaixa.admin())return;await seedDemo(true);await loadCat();renderAjustes();toast('Dados de exemplo carregados')};
 
 /* ================= atalhos de teclado (os mesmos do caixa) ================= */
 document.addEventListener('keydown',e=>{
