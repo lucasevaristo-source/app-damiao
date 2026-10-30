@@ -341,7 +341,9 @@ table.list{width:100%;border-collapse:collapse}
   .plist{min-height:120px}
 }
 </style>
-</head><body>
+<link rel="stylesheet" href="caixa.css">
+</head><body class="pdv-locked">
+<div id="pdvLogin"><form id="pdvEntrarForm"><h1>PDV Damião</h1><p>Entre com sua conta de operador para acessar o caixa.</p><label for="pdvEmail">E-mail</label><input id="pdvEmail" type="email" autocomplete="username" required><label for="pdvSenha">Senha</label><input id="pdvSenha" type="password" autocomplete="current-password" required><p id="pdvLoginErro" role="alert"></p><button id="pdvEntrar" type="submit">Entrar no PDV</button><p>O Master e os administradores cadastram operadores em Usuários no App Damião.</p><p><a href="https://paesdamiao.com.br/" target="_blank" rel="noopener">Minha conta / recuperação de senha</a></p></form></div>
 
 <div class="app">
   <div class="topbar">
@@ -439,7 +441,7 @@ table.list{width:100%;border-collapse:collapse}
     <!-- CAIXA DO DIA -->
     <section class="screen" id="s-caixa" hidden>
       <div class="pagewrap"><div class="pg">
-        <div class="filters"><input type="date" id="cData" aria-label="Data do caixa"><span class="grow"></span><button class="btn" id="btnPrintCx">Imprimir fechamento</button></div>
+        <div class="filters"><input type="date" id="cData" aria-label="Data do caixa"><span class="grow"></span><button class="btn" id="btnPrintCx">Imprimir conferência do caixa</button></div>
         <div class="kpis" id="kpis"></div>
         <div class="card scroll"><table class="list" id="tFormas"></table></div>
       </div></div>
@@ -504,6 +506,7 @@ table.list{width:100%;border-collapse:collapse}
   <div class="body">
     <div id="edNome" style="font-weight:500"></div>
     <div class="fld"><label for="edQtd">Quantidade</label><input id="edQtd" inputmode="decimal" class="num"></div>
+    <div class="fld"><label for="edPreco">Preço unitário (R$)</label><input id="edPreco" inputmode="decimal" class="num"></div><div id="edOriginal" class="hint"></div>
     <div class="fld"><label for="edDesc">Desconto no item (%)</label><input id="edDesc" inputmode="decimal" class="num"></div>
   </div>
   <footer><button data-close style="color:var(--blue-ink)">Cancelar</button><button id="edOk" style="background:var(--blue);color:#fff">Salvar</button></footer>
@@ -539,6 +542,8 @@ table.list{width:100%;border-collapse:collapse}
 <div id="print" class="rc"></div>
 <div id="toast" class="toast" hidden></div>
 
+<script src="caixa-core.js"></script>
+<script src="caixa.js"></script>
 <script>
 'use strict';
 /* ================= utilidades ================= */
@@ -567,16 +572,16 @@ const DB=(()=>{
     }catch(e){res()}});
   const tx=(s,m)=>db.transaction(s,m).objectStore(s);
   const p=r=>new Promise((ok,ko)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error)});
-  return{open,
+  return{open,durable:()=>!!db,
     all:async s=>{if(!db)return[...mem[s].values()];try{return await p(tx(s,'readonly').getAll())}catch(e){return[...mem[s].values()]}},
     get:async(s,id)=>{if(!db)return mem[s].get(id);try{return await p(tx(s,'readonly').get(id))}catch(e){return mem[s].get(id)}},
-    put:async(s,o)=>{mem[s].set(o.id,o);if(!db)return;try{await p(tx(s,'readwrite').put(o))}catch(e){}},
+    put:async(s,o)=>{if(!db)throw Error('Armazenamento indisponível. Venda não gravada.');await new Promise((ok,ko)=>{const t=db.transaction(s,'readwrite');t.objectStore(s).put(o);t.oncomplete=ok;t.onerror=()=>ko(t.error);t.onabort=()=>ko(t.error||Error('Gravação interrompida'));});mem[s].set(o.id,o);},
     replace:async(s,list)=>{mem[s]=new Map(list.map(o=>[o.id,o]));if(!db)return;try{const st=db.transaction(s,'readwrite');const o=st.objectStore(s);o.clear();list.forEach(x=>o.put(x));await new Promise((a,b)=>{st.oncomplete=a;st.onerror=()=>b(st.error)})}catch(e){}},
   };
 })();
 
 /* ================= estado ================= */
-const DEF_CFG={url:'',token:'',caixa:'CX1',operador:'',vendedorId:'',autoPrint:true,som:true,formasAtivas:null,rapidos:[],
+const DEF_CFG={url:'https://script.google.com/macros/s/AKfycbx0BzhNgKhnkTRuVgU0dRokGeuw7JgN2vkZv5wxzBS5vn72Uz34xPPbrZPualqWSAH5zg/exec',token:'',caixa:'CX1',operador:'',vendedorId:'',autoPrint:true,som:true,formasAtivas:null,rapidos:[],
   cabecalho:'The Brothers Foods Ltda\nCNPJ 61.863.830/0001-37 · Tel (11) 99305-4049\nRua Sete de Setembro, 1077, Loja 2 - Vila Doutor Laurindo\nTatuí/SP - CEP 18271-590',
   rodape:'Obrigado pela preferência',fiscal:'off'};
 let CFG={...DEF_CFG};
@@ -599,7 +604,7 @@ async function loadCat(){
   renderCats();renderProds();renderFormas();renderNames();
 }
 const cliNome=c=>c?(c.fantasia||c.nome):'Consumidor final - padrão';
-const vendNome=()=>{const v=CAT.vendedores.find(x=>x.id===CFG.vendedorId);return v?v.nome:(CFG.operador||'Operador')};
+const vendNome=()=>{if(PdvCaixa.usuario)return PdvCaixa.usuario.nome;const v=CAT.vendedores.find(x=>x.id===CFG.vendedorId);return v?v.nome:(CFG.operador||'Operador')};
 const formasAtivas=()=>{const a=CFG.formasAtivas;return CAT.formas.filter(f=>a?a.includes(String(f.id)):f.padraoPdv)};
 function renderNames(){$('#tbCliNome').textContent=cliNome(cart.cliente);$('#hCli').textContent=cliNome(cart.cliente);$('#tbVendNome').textContent=vendNome();$('#hVend').textContent=vendNome()}
 
@@ -612,6 +617,8 @@ function precoDe(p){
 /* ================= telas ================= */
 const TITLES={inicio:'Início',balcao:'Balcão',pagamento:'Pagamento',vendas:'Últimas vendas',caixa:'Caixa do dia',ajustes:'Configurações'};
 function go(s){
+  if(s==='ajustes'&&!PdvCaixa.admin()){toast('Somente o Master ou administrador pode alterar configurações.');return;}
+  if((s==='balcao'||s==='pagamento')&&!PdvCaixa.podeVender())return;
   if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
   screen=s;$$('.screen').forEach(x=>x.hidden=x.id!=='s-'+s);
   $('#title').textContent=TITLES[s];$('#toolbar').hidden=s==='inicio';
@@ -619,7 +626,7 @@ function go(s){
   hideSug();
   if(s==='balcao'){renderCart();focusScan()}
   if(s==='pagamento'){setVal(0);renderPay();setTimeout(()=>$('#valor').focus(),0)}
-  if(s==='vendas')renderVendas();if(s==='caixa')renderCaixa();if(s==='ajustes')renderAjustes();
+  if(s==='vendas')renderVendas();if(s==='caixa'){renderCaixa();PdvCaixa.render();}if(s==='ajustes')renderAjustes();
 }
 function voltar(){if($('.modal:not([hidden])'))return;({balcao:'inicio',pagamento:'balcao',vendas:'inicio',caixa:'inicio',ajustes:'inicio'})[screen]&&go({balcao:'inicio',pagamento:'balcao',vendas:'inicio',caixa:'inicio',ajustes:'inicio'}[screen])}
 $('#btnBack').onclick=voltar;
@@ -627,7 +634,7 @@ $$('[data-act]').forEach(b=>b.onclick=()=>homeAct(b.dataset.act));
 function homeAct(a){
   if(a==='balcao')go('balcao');else if(a==='cliente')pickCliente();else if(a==='vendedor')pickVendedor();
   else if(a==='vendas')go('vendas');else if(a==='caixa')go('caixa');else if(a==='ajustes')go('ajustes');
-  else if(a==='enviar')enviarAgora();else if(a==='atualizar')atualizarCatalogo();else if(a==='fechamento')imprimirFechamento(today());
+  else if(a==='enviar')enviarAgora();else if(a==='atualizar')atualizarCatalogo();else if(a==='fechamento')PdvCaixa.imprimirAtual();
 }
 function tick(){const d=new Date();$('#clock').innerHTML=d.toLocaleDateString('pt-BR')+'<br>'+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
 tick();setInterval(tick,15000);
@@ -657,9 +664,9 @@ $('#prods').addEventListener('click',e=>{if(e.target.closest('[data-editar]')){a
 /* ================= balcão: itens ================= */
 const itemTotal=i=>Math.round(i.preco*i.qtd*(1-(i.descPct||0)/100));
 function addProduto(p,qtd=1){
-  const ex=cart.itens.find(i=>i.produtoId===p.id&&!i.descPct);
+  const ex=cart.itens.find(i=>i.produtoId===p.id&&!i.descPct&&i.preco===precoDe(p));
   if(ex){ex.qtd=+(ex.qtd+qtd).toFixed(3);selRow=cart.itens.indexOf(ex)}
-  else{cart.itens.push({produtoId:p.id,codigo:p.codigo,gtin:p.gtin||'',nome:p.nome,unidade:p.unidade||'UN',ncm:p.ncm||'',qtd,preco:precoDe(p),descPct:0});selRow=cart.itens.length-1}
+  else{cart.itens.push({produtoId:p.id,codigo:p.codigo,gtin:p.gtin||'',nome:p.nome,unidade:p.unidade||'UN',ncm:p.ncm||'',qtd,preco:precoDe(p),precoOriginal:precoDe(p),descPct:0});selRow=cart.itens.length-1}
   beep();cart.pagamentos=[];renderCart();
 }
 function snd(f,t,d,type){if(!CFG.som)return;try{const a=snd.ctx||(snd.ctx=new (window.AudioContext||window.webkitAudioContext)());const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;g.gain.value=t;o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+d)}catch(e){}}
@@ -677,7 +684,7 @@ function renderCart(){
   if(!cart.itens.length)h+='<tr><td colspan="6"><div class="nada"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.2 9 12.8 2.4a1 1 0 0 0-1.6 0L6.8 9H2a1 1 0 0 0-1 1.3l2.5 9.3A2 2 0 0 0 5.5 21h13a2 2 0 0 0 2-1.4l2.5-9.3A1 1 0 0 0 22 9zM9 9l3-4.4L15 9zm3 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>Sem produtos</div></td></tr>';
   else h+=cart.itens.map((i,k)=>`<tr class="row${k===selRow?' sel':''}"><td><button class="rm" data-rm="${k}" aria-label="Remover ${esc(i.nome)}">−</button></td>
     <td class="n">${esc(i.nome)} <button class="ed" data-ed="${k}" aria-label="Editar ${esc(i.nome)}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.2V21h3.8l11-11-3.8-3.8zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.8 3.8z"/></svg></button></td>
-    <td class="num">${fq(i.qtd)} ${esc(i.unidade==='UN'?'Un':i.unidade)}</td><td class="num">${R$(i.preco)}</td><td class="num">${(i.descPct||0).toFixed(2)}%</td><td class="num">${R$(itemTotal(i))}</td></tr>`).join('');
+    <td class="num">${fq(i.qtd)} ${esc(i.unidade==='UN'?'Un':i.unidade)}</td><td class="num"><button class="preco-edit" data-preco="${k}" aria-label="Alterar preço de ${esc(i.nome)}">${R$(i.preco)}</button></td><td class="num">${(i.descPct||0).toFixed(2)}%</td><td class="num">${R$(itemTotal(i))}</td></tr>`).join('');
   $('#cart').innerHTML=h+'</tbody></table>';
   const s=$('#cart tr.sel');if(s)s.scrollIntoView({block:'nearest'});
   $('#rProdLbl').textContent='Produtos'+(cart.itens.length?' ('+fqs(nItens())+')':'');$('#rProd').textContent=R$(semDesc());
@@ -688,15 +695,17 @@ function renderCart(){
 $('#cart').addEventListener('click',e=>{
   const b=e.target.closest('button');if(b){
     if(b.dataset.rm!=null){cart.itens.splice(+b.dataset.rm,1);selRow=-1;cart.pagamentos=[];renderCart();focusScan();return}
+    if(b.dataset.preco!=null){editItem(+b.dataset.preco,true);return}
     if(b.dataset.ed!=null){editItem(+b.dataset.ed);return}}
   const tr=e.target.closest('tr.row');if(tr){selRow=[...tr.parentNode.children].indexOf(tr);renderCart();focusScan()}
 });
 
 /* editar item */
 let edK=-1;
-function editItem(k){edK=k;const i=cart.itens[k];$('#edNome').textContent=i.nome;$('#edQtd').value=fqs(i.qtd);$('#edDesc').value=(i.descPct||0).toLocaleString('pt-BR');openModal('#mEdit');$('#edQtd').select()}
-$('#edOk').onclick=()=>{const i=cart.itens[edK];const q=parseBR($('#edQtd').value)/100;const d=Math.min(100,Math.max(0,parseBR($('#edDesc').value)/100));
-  if(q<=0)cart.itens.splice(edK,1);else{i.qtd=q;i.descPct=d}cart.pagamentos=[];closeModals();renderCart();focusScan()};
+function editItem(k,preco=false){edK=k;const i=cart.itens[k];$('#edNome').textContent=i.nome;$('#edQtd').value=fqs(i.qtd);$('#edPreco').value=(i.preco/100).toFixed(2).replace('.',',');$('#edOriginal').textContent='Preço original deste item: '+R$(i.precoOriginal??i.preco);$('#edDesc').value=(i.descPct||0).toLocaleString('pt-BR');openModal('#mEdit');$(preco?'#edPreco':'#edQtd').select()}
+$('#edOk').onclick=()=>{try{const i=cart.itens[edK];const q=parseBR($('#edQtd').value)/100;const d=Math.min(100,Math.max(0,parseBR($('#edDesc').value)/100)),preco=PdvMoney.centavos($('#edPreco').value);
+  if(preco<=0)throw Error('O preço unitário precisa ser maior que zero.');
+  if(q<=0)cart.itens.splice(edK,1);else{if(i.precoOriginal==null)i.precoOriginal=i.preco;if(preco!==i.preco){i.precoAlteradoPor=PdvCaixa.usuario.nome;i.precoAlteradoEm=new Date().toISOString();}i.qtd=q;i.preco=preco;i.descPct=d}cart.pagamentos=[];closeModals();renderCart();focusScan();}catch(e){toast(e.message)}};
 $('#mEdit').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#edOk').click()}});
 /* desconto geral */
 $('#rDescLine').onclick=()=>{if(!cart.itens.length)return;$('#dsPct').value=cart.descPct?cart.descPct.toLocaleString('pt-BR'):'';$('#dsVal').value=cart.descVal?fmt(cart.descVal):'';openModal('#mDesc');$('#dsPct').focus()};
@@ -824,13 +833,15 @@ $('#plist').addEventListener('click',e=>{const b=e.target.closest('[data-rp]');i
 /* ================= finalizar ================= */
 async function nextNumero(){const m=await DB.get('meta','seq');const n=(m?m.v:0)+1;await DB.put('meta',{id:'seq',v:n});return(CFG.caixa||'CX1')+'-'+String(n).padStart(6,'0')}
 let finalizando=false;
-async function finalizar(){
+async function finalizar(){if(!PdvCaixa.podeVender())return;return PdvCaixa.lock(finalizarComCaixa);}
+async function finalizarComCaixa(){
+  if(!PdvCaixa.podeVender())return;
   if(screen!=='pagamento'||$('#btnFin').disabled||finalizando)return;finalizando=true;
   try{
     const tot=total(),pg=pago();
     // o troco sai do dinheiro: no Bling entra o valor da venda
-    let resto=tot;const pags=cart.pagamentos.map(p=>{const v=Math.min(p.valor,resto);resto-=v;return{...p,valorLiquido:v}}).filter(p=>p.valorLiquido>0);
-    const venda={id:uid(),numero:await nextNumero(),criadaEm:new Date().toISOString(),dia:today(),caixa:CFG.caixa,operador:vendNome(),vendedorId:CFG.vendedorId||null,
+    const pags=PdvMoney.pagamentos(cart.pagamentos,tot,CAT.formas);
+    const venda={id:uid(),caixaSessaoId:PdvCaixa.aberto.id,usuarioId:PdvCaixa.usuario.id,numero:await nextNumero(),criadaEm:new Date().toISOString(),dia:today(),caixa:CFG.caixa,operador:PdvCaixa.usuario.nome,vendedorId:CFG.vendedorId||null,
       cliente:cart.cliente?{id:cart.cliente.id,nome:cart.cliente.nome,fantasia:cart.cliente.fantasia||'',documento:cart.cliente.documento||''}:null,
       cpf:cart.cpf||'',itens:cart.itens.map(i=>({...i,total:itemTotal(i)})),subtotal:semDesc(),desconto:semDesc()-tot,total:tot,
       pagamentos:pags,recebido:pg,troco:Math.max(0,pg-tot),
@@ -839,7 +850,7 @@ async function finalizar(){
     await Fiscal.depoisDaVenda(venda);calcMaisVendidos();
     clearSale(true);go('balcao');showReceipt(venda,true);
     updateQueue();Sync.enviar();
-  }finally{finalizando=false}
+  }catch(e){toast(e.message);}finally{finalizando=false}
 }
 $('#btnFin').onclick=finalizar;
 function clearSale(keep){cart=newCart();selRow=-1;$('#busca').value='';$('#scan').value='';syncCpf('');setVal(0);renderNames();renderProds();renderCart();if(!keep)focusScan()}
@@ -916,8 +927,9 @@ const Sync={
   busy:false,
   // ponte no Google Apps Script: GET com ?acao=...&chave=..., POST em texto simples (sem cabeçalhos extras, por causa do CORS do Google)
   async req(acao,body){
+    if(acao==='catalogo')return PdvCaixa.catalogo();if(acao==='versao')return PdvCaixa.versao();
     const base=CFG.url.trim();let r;
-    if(body)r=await fetch(base,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({acao,chave:CFG.token,...body}),redirect:'follow'});
+    if(body)r=await fetch(base,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({acao,chave:CFG.token,pdvToken:PdvCaixa.token,...body}),redirect:'follow'});
     else r=await fetch(base+(base.includes('?')?'&':'?')+'acao='+acao+'&chave='+encodeURIComponent(CFG.token),{redirect:'follow'});
     const txt=await r.text();let j;try{j=JSON.parse(txt)}catch(e){throw new Error('A ponte do Google não respondeu direito ('+r.status+'). Confira o endereço.')}
     if(!r.ok||j.ok===false)throw new Error(j.erro||('Erro '+r.status));return j;
@@ -935,19 +947,19 @@ const Sync={
     await loadCat();return prods.length;
   },
   async enviar(){
-    if(this.busy||!CFG.url||!navigator.onLine)return;this.busy=true;
+    if(this.busy||!CFG.url||!navigator.onLine||!PdvCaixa.autenticado)return;this.busy=true;
     try{
       const pend=(await DB.all('vendas')).filter(v=>v.status==='pendente'||(v.status==='erro'&&v.tentativas<20)).sort((a,b)=>a.criadaEm.localeCompare(b.criadaEm));
       for(const v of pend){
         try{
-          const j=await this.req('venda',{venda:{id:v.id,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
-            itens:v.itens.map(i=>({produtoId:i.produtoId,codigo:i.codigo,nome:i.nome,unidade:i.unidade,qtd:i.qtd,valor:i.preco/100,descontoPct:i.descPct||0})),
+          const j=await this.req('venda',{venda:{id:v.id,caixaSessaoId:v.caixaSessaoId,caixa:v.caixa,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
+            itens:v.itens.map(i=>({produtoId:i.produtoId,codigo:i.codigo,nome:i.nome,unidade:i.unidade,qtd:i.qtd,valor:i.preco/100,precoOriginal:(i.precoOriginal??i.preco)/100,descontoPct:i.descPct||0})),
             desconto:(v.subtotal-v.total)/100,total:v.total/100,pagamentos:v.pagamentos.map(p=>({formaId:p.formaId,valor:p.valorLiquido/100})),fiscal:v.fiscal.modo}});
           v.status='enviada';v.erro='';v.bling={pedidoId:j.pedidoId,numero:j.numero};
         }catch(e){v.status='erro';v.erro=String(e.message||e);v.tentativas++;if(!navigator.onLine){await DB.put('vendas',v);break}}
         await DB.put('vendas',v);
       }
-    }finally{this.busy=false;updateQueue();if(screen==='vendas')renderVendas()}
+    }finally{this.busy=false;updateQueue();if(screen==='vendas')renderVendas();if(PdvCaixa.autenticado&&navigator.onLine)PdvCaixa.atualizar().catch(()=>{});}
   }
 };
 async function enviarAgora(){if(!CFG.url){toast('Ligue ao Bling em Configurações primeiro');return}if(!navigator.onLine){toast('Sem internet. As vendas vão quando a conexão voltar.');return}
@@ -1015,10 +1027,10 @@ async function renderCaixa(){
    (rows.map(([n,x])=>`<tr><td>${esc(n)}</td><td class="r num">${x.n}</td><td class="r num">${R$(x.v)}</td></tr>`).join('')||'<tr><td colspan="3" class="hint">Sem vendas nesta data.</td></tr>')+
    `</tbody><tfoot><tr><th>Total</th><th></th><th class="r num">${R$(c.tot)}</th></tr></tfoot>`;
 }
-$('#cData').onchange=renderCaixa;$('#btnPrintCx').onclick=()=>imprimirFechamento($('#cData').value||today());
+$('#cData').onchange=renderCaixa;$('#btnPrintCx').onclick=()=>PdvCaixa.imprimirAtual();
 async function imprimirFechamento(d){
   const c=await caixaDados(d);const cab=String(CFG.cabecalho||'').split('\n')[0];
-  printHTML(`<div class="c"><b>${esc(cab)}</b></div><div class="tt">FECHAMENTO DE CAIXA</div><div class="ln sm"><span>${d.split('-').reverse().join('/')}</span><span>${esc(CFG.caixa)} · ${esc(vendNome())}</span></div><div class="sep"></div>
+  printHTML(`<div class="c"><b>${esc(cab)}</b></div><div class="tt">RELATÓRIO DE VENDAS DO DIA</div><div class="ln sm"><span>${d.split('-').reverse().join('/')}</span><span>${esc(CFG.caixa)} · ${esc(vendNome())}</span></div><div class="sep"></div>
   ${Object.entries(c.por).map(([n,x])=>`<div class="ln"><span>${esc(n)} (${x.n})</span><span>${fmt(x.v)}</span></div>`).join('')}
   <div class="tot"><span>TOTAL</span><span>R$ ${fmt(c.tot)}</span></div><div class="ln sm"><span>Vendas</span><span>${c.vs.length}</span></div><div class="ln sm"><span>Canceladas</span><span>${c.canc}</span></div><div class="ln sm"><span>Descontos</span><span>${fmt(c.desc)}</span></div>
   <div class="sep"></div><div class="sm" style="margin-top:14px">Conferido por: ____________________</div><div class="c sm" style="margin-top:6px">Impresso em ${dtBR(new Date().toISOString())}</div>`);
@@ -1097,7 +1109,7 @@ function updateDemoBar(){$('#demoBar').hidden=!!CFG.url}
   await DB.open();await loadCfg();await seedDemo(false);await calcMaisVendidos();await loadCat();
   updateDemoBar();const hadDraft=await loadDraft();renderCart();updateQueue();go(hadDraft?'balcao':'inicio');
   if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}}
-  if(CFG.url&&navigator.onLine){Sync.catalogo().catch(()=>{});Sync.enviar()}
+  await PdvCaixa.iniciar();
 })();
 </script>
 </body></html>
