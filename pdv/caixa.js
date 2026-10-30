@@ -2,19 +2,21 @@
 const PdvCaixa=(()=>{
   const PONTE='https://script.google.com/macros/s/AKfycbx0BzhNgKhnkTRuVgU0dRokGeuw7JgN2vkZv5wxzBS5vn72Uz34xPPbrZPualqWSAH5zg/exec';
   let token='',usuario=null,estado={aberto:null,ultimo:null},expira=0,busy=false;
-  const admin=()=>usuario&&['master','admin'].includes(usuario.papel);
+  const admin=()=>usuario&&usuario.papel==='master';
+  const diaPermitido=d=>!!usuario&&(admin()||d===today());
   const lock=fn=>navigator.locks?navigator.locks.request('pdv-damiao-operacao',fn):Promise.reject(Error('Atualize o Chrome para usar o controle de caixa.'));
   async function api(acao,dados={}){
     if(!navigator.onLine)throw Error('Conecte à internet para esta operação.');
     const r=await fetch(CFG.url||PONTE,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({app:1,acao,dados,token}),redirect:'follow'});
     const j=await r.json();if(!r.ok||!j.ok)throw Error(j.erro||'Não foi possível confirmar a operação no Google.');expira=Date.now()+5*60*60*1000;return j.r;
   }
-  function barra(){const b=document.querySelector('#pdvOperadorBar');if(!b||!usuario)return;const c=estado.aberto;b.querySelector('span').textContent=usuario.nome+' · '+CFG.caixa+' · '+(c?'Caixa aberto · saldo confirmado '+R$(c.esperado):'Caixa fechado');}
+  function barra(){const b=document.querySelector('#pdvOperadorBar');if(!b||!usuario)return;const c=estado.aberto;b.querySelector('span').textContent=usuario.nome+' · '+CFG.caixa+' · '+(c?'Caixa aberto · saldo confirmado '+R$(c.esperado):'Caixa fechado');b.querySelector('#pdvUsuarios').hidden=!admin();document.querySelectorAll('[data-act="ajustes"]').forEach(x=>x.hidden=!admin());}
   function podeVender(){if(!usuario||Date.now()>expira){bloquear('Entre novamente para continuar.');return false;}if(!estado.aberto||estado.aberto.caixa!==CFG.caixa){toast('Abra o caixa antes de vender.');go('caixa');return false;}return true;}
   async function atualizar(){estado=await api('pdvEstado',{caixa:CFG.caixa});barra();return estado;}
   function bloquear(msg=''){token='';usuario=null;estado={aberto:null,ultimo:null};document.body.classList.add('pdv-locked');document.querySelector('#pdvLogin').hidden=false;document.querySelector('#pdvSenha').value='';document.querySelector('#pdvLoginErro').textContent=msg;}
   async function iniciar(){
-    const bar=document.createElement('div');bar.id='pdvOperadorBar';bar.innerHTML='<span></span><button type="button" id="pdvVerCaixa">Abertura e fechamento</button><button type="button" id="pdvSair">Sair / trocar operador</button>';document.querySelector('.topbar').after(bar);
+    const bar=document.createElement('div');bar.id='pdvOperadorBar';bar.innerHTML='<span></span><button type="button" id="pdvVerCaixa">Abertura e fechamento</button><button type="button" id="pdvUsuarios" hidden>Usuários do PDV</button><button type="button" id="pdvSair">Sair / trocar operador</button>';document.querySelector('.topbar').after(bar);
+    bar.querySelector('#pdvUsuarios').onclick=()=>acao(usuarios);
     bar.querySelector('#pdvVerCaixa').onclick=()=>go('caixa');
     bar.querySelector('#pdvSair').onclick=async()=>{if(finalizando||Sync.busy){toast('Aguarde a venda terminar de salvar e enviar.');return;}if(cart.itens.length){toast('Conclua ou limpe a venda em andamento antes de sair.');return;}try{if(token)await api('pdvSair',{sessao:token});bloquear();}catch(e){toast(e.message);}};
     document.querySelector('#pdvEntrarForm').onsubmit=async e=>{e.preventDefault();const b=document.querySelector('#pdvEntrar');b.disabled=true;try{
@@ -25,17 +27,40 @@ const PdvCaixa=(()=>{
     bloquear();
   }
   async function semPendencias(){await Sync.enviar();const p=(await DB.all('vendas')).filter(v=>v.status==='pendente'||v.status==='erro');if(p.length)throw Error('Existem '+p.length+' venda(s) sem confirmação no Bling. Envie ou resolva os erros antes de movimentar ou fechar o caixa.');}
+  async function abrir(){
+    await atualizar();const anteriores=(await DB.all('vendas')).filter(v=>!v.caixaSessaoId&&['pendente','erro','enviada'].includes(v.status)&&v.caixa===CFG.caixa);
+    if(anteriores.length){
+      if(!admin()||estado.ultimo)throw Error('O Master deve conferir as vendas anteriores antes de iniciar o novo controle de caixa.');
+      if(anteriores.some(v=>v.dia!==today()))throw Error('Há vendas de outros dias sem caixa. Solicite a conferência pelo Master.');
+      const c=estado.aberto||await api('pdvAbrir',{caixa:CFG.caixa});await atualizar();
+      for(const v of anteriores){v.caixaSessaoId=c.id;v.anteriorAoCaixa=true;v.operadorOriginal=v.operador;v.status='pendente';v.tentativas=0;v.erro='';await DB.put('vendas',v);}
+      await Sync.enviar();await render();toast('Caixa aberto. Vendas anteriores vinculadas para conferência e envio sem duplicar.');return;
+    }
+    await semPendencias();await api('pdvAbrir',{caixa:CFG.caixa});await render();
+  }
   async function acao(fn){if(busy)return;busy=true;try{await lock(fn);}catch(e){toast(e.message);const p=document.querySelector('#caixaPainel');if(p){let m=p.querySelector('.caixa-erro');if(!m){m=document.createElement('p');m.className='caixa-erro';p.prepend(m);}m.textContent=e.message;}}finally{busy=false;}}
+  async function usuarios(){
+    if(!admin())throw Error('Somente o Master gerencia usuários do PDV.');
+    const lista=await api('listarUsuarios'),existente=lista.find(x=>x.email==='caixa');
+    if(existente&&existente.papel!=='caixa')throw Error('O login caixa pertence a outro perfil. Confira o cadastro no App.');
+    document.querySelector('#mUsuarioCaixa')?.remove();const modal=document.createElement('div');modal.id='mUsuarioCaixa';modal.className='modal';modal.innerHTML='<div class="dlg" role="dialog" aria-modal="true"><div class="body"></div></div>';document.body.append(modal);const p=modal.querySelector('.body');
+    p.innerHTML='<h2>Usuário Caixa</h2><p>Login: <b>caixa</b>. Perfil: operador de caixa. Visualiza somente as vendas e os relatórios de hoje. O histórico completo e as configurações ficam com o Master.</p><form id="novoUsuarioCaixa" class="caixa-form"><label>Nome<input value="Caixa" readonly></label><label>Usuário<input value="caixa" readonly autocomplete="username"></label><label>'+ (existente?'Nova senha':'Defina a senha') +'<input name="senha" type="password" minlength="6" required autocomplete="new-password"></label><button type="submit" class="btn">'+(existente?'Atualizar senha do Caixa':'Criar usuário Caixa')+'</button><button type="button" class="btn" id="voltarUsuarioCaixa">Voltar</button><p id="usuarioCaixaMsg" role="status"></p></form>';
+    p.querySelector('#voltarUsuarioCaixa').onclick=()=>modal.remove();
+    p.querySelector('form').onsubmit=e=>{e.preventDefault();const f=e.currentTarget;acao(async()=>{if(!admin())throw Error('Somente o Master gerencia usuários do PDV.');await api('salvarUsuario',{id:existente?.id,nome:'Caixa',email:'caixa',papel:'caixa',senha:f.elements.senha.value,ativo:'sim'});f.elements.senha.value='';p.querySelector('#usuarioCaixaMsg').textContent='Usuário Caixa salvo. Entre no PDV com o usuário caixa e a senha definida.';f.querySelector('[type="submit"]').disabled=true;});};
+  }
   async function render(){
     let p=document.querySelector('#caixaPainel');if(!p){p=document.createElement('section');p.id='caixaPainel';p.className='caixa-painel';document.querySelector('#s-caixa .pg').prepend(p);}
     if(!usuario){p.textContent='Entre para acessar o caixa.';return;}
     try{if(navigator.onLine)await atualizar();}catch(e){p.innerHTML='<p class="caixa-erro">'+esc(e.message)+'</p>';return;}
     const c=estado.aberto||estado.ultimo,ab=estado.aberto;
+    if(c?.saldoAnterior){p.innerHTML='<h2>'+esc(CFG.caixa)+' · '+(ab?'Caixa anterior pendente':'Caixa fechado')+'</h2><p>Saldo do sistema para a abertura: <b>'+R$(c.esperado)+'</b>. O histórico de outros dias está disponível somente ao Master.</p>'+(ab?'<p>Solicite ao Master a conferência do caixa anterior.</p>':'<button class="btn" id="abrirSaldoAnterior">Abrir caixa com '+R$(c.esperado)+'</button>');const b=p.querySelector('button');if(b)b.onclick=()=>acao(abrir);return;}
     p.innerHTML='<h2>'+esc(CFG.caixa)+' · '+(ab?'Caixa aberto':'Caixa fechado')+'</h2><p>A próxima abertura usa o saldo registrado no sistema. A contagem física e a diferença ficam no histórico.</p>'+(c?`<p>${ab?'Aberto':'Último fechamento'} · ${esc(c.operador)} · ${dtBR(ab?c.abertoEm:c.fechadoEm)}</p><div class="caixa-valores"><div>Abertura<strong>${R$(c.inicial)}</strong></div><div>Vendas em dinheiro<strong>${R$(c.vendasDinheiro)}</strong></div><div>Suprimentos<strong>${R$(c.suprimentos)}</strong></div><div>Sangrias<strong>${R$(c.sangrias)}</strong></div><div>Saldo do sistema<strong>${R$(c.esperado)}</strong></div>${!ab?`<div>Dinheiro contado<strong>${R$(c.contado)}</strong></div><div class="caixa-diferenca">Diferença<strong>${R$(c.diferenca)}</strong></div>`:''}</div>`:'<p>Primeira abertura: <b>R$ 0,00</b>.</p>')+`<div class="caixa-acoes">${ab?'<button class="btn" data-caixa="suprimento">Registrar suprimento</button><button class="btn" data-caixa="sangria">Registrar sangria</button><button class="btn" data-caixa="fechar">Fechar caixa</button>':'<button class="btn" data-caixa="abrir">Abrir caixa com '+R$(c?c.esperado:0)+'</button>'}${c?'<button class="btn" data-caixa="imprimir">Imprimir conferência</button>':''}<button class="btn" data-caixa="atualizar">Atualizar</button></div><div id="caixaFormulario"></div>`+(c?`<table class="caixa-mov"><thead><tr><th>Hora</th><th>Movimento</th><th>Responsável / motivo</th><th>Valor</th></tr></thead><tbody>${c.movimentos.map(m=>`<tr><td>${dtBR(m.em)}</td><td>${esc(m.tipo)}</td><td>${esc(m.operador)} · ${esc(m.motivo)}</td><td>${R$(m.tipo==='venda'?m.dinheiro:m.valor)}</td></tr>`).join('')}</tbody></table>`:'');
-    p.querySelectorAll('[data-caixa]').forEach(b=>b.onclick=()=>{const tipo=b.dataset.caixa;if(tipo==='imprimir'){imprimir(c);return;}if(tipo==='atualizar'){acao(render);return;}if(tipo==='abrir'){acao(async()=>{await semPendencias();await api('pdvAbrir',{caixa:CFG.caixa});await render();});return;}formulario(tipo);});
+    p.querySelectorAll('[data-caixa]').forEach(b=>b.onclick=()=>{const tipo=b.dataset.caixa;if(tipo==='imprimir'){imprimir(c);return;}if(tipo==='atualizar'){acao(render);return;}if(tipo==='abrir'){acao(abrir);return;}formulario(tipo);});
+    if(ab&&admin()&&!estado.ultimo){const antigas=(await DB.all('vendas')).filter(v=>!v.caixaSessaoId&&v.caixa===CFG.caixa&&['pendente','erro','enviada'].includes(v.status));if(antigas.length){const b=document.createElement('button');b.className='btn';b.textContent='Conferir '+antigas.length+' venda(s) anteriores ao novo controle';b.onclick=()=>acao(abrir);p.append(b);}}
   }
   function formulario(tipo){const fechar=tipo==='fechar',id=uid(),box=document.querySelector('#caixaFormulario');box.innerHTML=`<form class="caixa-form"><h3>${fechar?'Conferir e fechar o caixa':tipo==='sangria'?'Retirada de dinheiro — sangria':'Entrada de dinheiro — suprimento'}</h3><label>${fechar?'Dinheiro contado na gaveta (R$)':'Valor em dinheiro (R$)'}<input name="valor" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label><label>${fechar?'Observação da conferência (obrigatória se houver diferença)':'Motivo do movimento'}<textarea name="motivo" ${fechar?'':'required minlength="3"'}></textarea></label><p>${fechar?'O saldo do sistema será mantido para a próxima abertura, mesmo se o contado for diferente.':'Este movimento registra somente dinheiro físico. Não altera PIX, cartão ou contas no Bling.'}</p><button class="btn" type="submit">${fechar?'Confirmar fechamento':'Confirmar movimento'}</button><button class="btn" type="button" data-cancel>Voltar sem registrar</button></form>`;box.querySelector('[data-cancel]').onclick=()=>box.replaceChildren();box.querySelector('form').onsubmit=e=>{e.preventDefault();const f=e.currentTarget,motivo=f.elements.motivo.value;acao(async()=>{const valor=PdvMoney.centavos(f.elements.valor.value);if(cart.itens.length)throw Error('Conclua ou limpe a venda em andamento primeiro.');await semPendencias();await atualizar();if(!estado.aberto)throw Error('O caixa já foi fechado.');let fechamento=null;if(fechar)fechamento=await api('pdvFechar',{sessaoId:estado.aberto.id,contado:valor,justificativa:motivo});else await api('pdvMovimento',{id,sessaoId:estado.aberto.id,tipo,valor,motivo});await render();toast(fechar?'Fechamento registrado. Abrindo impressão.':'Movimento registrado.');if(fechamento)imprimir(fechamento);});};box.querySelector('input').focus();}
   function imprimir(c){
+    if(c.saldoAnterior){toast('Somente o Master consulta relatórios de outros dias.');return;}
     const fechado=c.status==='fechado',dif=+c.diferenca||0,resultado=dif===0?'CONFERIDO — valor informado confere com o sistema':(dif<0?'FALTA de ':'SOBRA de ')+R$(Math.abs(dif));
     printHTML(`<div class="c"><b>${esc(String(CFG.cabecalho).split('\n')[0])}</b></div><div class="tt">${fechado?'RELATÓRIO DO DIA — FECHAMENTO DE CAIXA':'CONFERÊNCIA — CAIXA ABERTO'}</div>
     <p>Caixa: ${esc(c.caixa)}<br>Operador: ${esc(c.operador)}<br>Abertura: ${dtBR(c.abertoEm)}${c.fechadoEm?'<br>Fechamento: '+dtBR(c.fechadoEm):''}</p><div class="sep"></div>
@@ -48,5 +73,5 @@ const PdvCaixa=(()=>{
     <p style="margin-top:24px">________________________________<br>Assinatura do operador do caixa<br>${esc(c.operador)}</p><p class="sm">Impresso em ${dtBR(new Date().toISOString())}</p>`);
   }
   async function imprimirAtual(){try{await atualizar();const c=estado.aberto||estado.ultimo;if(!c)throw Error('Nenhum caixa registrado.');imprimir(c);}catch(e){toast(e.message);}}
-  return {iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
+  return {iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
 })();
