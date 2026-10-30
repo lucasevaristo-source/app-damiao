@@ -20,7 +20,7 @@ const PdvCaixa=(()=>{
     document.querySelector('#pdvEntrarForm').onsubmit=async e=>{e.preventDefault();const b=document.querySelector('#pdvEntrar');b.disabled=true;try{
       if(!DB.durable())throw Error('O armazenamento local está indisponível. Não é seguro registrar vendas neste navegador.');
       const r=await api('pdvEntrar',{email:document.querySelector('#pdvEmail').value,senha:document.querySelector('#pdvSenha').value});token=r.token;usuario=r.usuario;expira=Date.now()+5*60*60*1000;document.querySelector('#pdvSenha').value='';
-      await atualizar();await api('pdvCatalogo');document.body.classList.remove('pdv-locked');document.querySelector('#pdvLogin').hidden=true;barra();renderNames();go(estado.aberto?'inicio':'caixa');if(CFG.url){Sync.catalogo().catch(e=>toast(e.message));Sync.enviar();}
+      await atualizar();await Sync.catalogo();document.body.classList.remove('pdv-locked');document.querySelector('#pdvLogin').hidden=true;barra();renderNames();go(estado.aberto?'inicio':'caixa');if(CFG.url)Sync.enviar();
     }catch(x){bloquear(x.message);}finally{b.disabled=false;}};
     bloquear();
   }
