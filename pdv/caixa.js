@@ -17,7 +17,7 @@ const PdvCaixa=(()=>{
   async function iniciar(){
     const bar=document.createElement('div');bar.id='pdvOperadorBar';bar.innerHTML='<span></span><button type="button" id="pdvVerCaixa">Abertura e fechamento</button><button type="button" id="pdvUsuarios" hidden>Usuários do PDV</button><button type="button" id="pdvSair">Sair / trocar operador</button>';document.querySelector('.topbar').after(bar);
     bar.querySelector('#pdvUsuarios').onclick=()=>acao(usuarios);
-    bar.querySelector('#pdvVerCaixa').onclick=()=>go('caixa');
+    bar.querySelector('#pdvVerCaixa').onclick=()=>estado.aberto?abrirFechamento():go('caixa');
     bar.querySelector('#pdvSair').onclick=async()=>{if(finalizando||Sync.busy){toast('Aguarde a venda terminar de salvar e enviar.');return;}if(cart.itens.length){toast('Conclua ou limpe a venda em andamento antes de sair.');return;}try{if(token)await api('pdvSair',{sessao:token});bloquear();}catch(e){toast(e.message);}};
     document.querySelector('#pdvEntrarForm').onsubmit=async e=>{e.preventDefault();const b=document.querySelector('#pdvEntrar');b.disabled=true;try{
       if(!DB.durable())throw Error('O armazenamento local está indisponível. Não é seguro registrar vendas neste navegador.');
@@ -60,16 +60,16 @@ const PdvCaixa=(()=>{
   }
   function abrirFechamento(){
     if(!usuario||Date.now()>expira){bloquear('Entre novamente para continuar.');return;}
+    if(cart.itens.length){toast('Conclua ou limpe a venda em andamento antes de fechar o caixa.');return;}
     if(!estado.aberto){toast('Abra o caixa antes de acessar o fechamento.');go('caixa');return;}
     go('fechamento');const box=document.querySelector('#fechamentoConteudo');
-    box.innerHTML=`<form id="formFechamentoCaixa"><h1 class="fechamento-titulo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 4h10v16H9M3 12h11m-4-4 4 4-4 4"/></svg>Fechamento de caixa</h1><p class="fechamento-subtitulo">Informe os valores</p><label class="fechamento-campo" for="fechamentoDinheiro">Dinheiro</label><div class="fechamento-dinheiro"><span aria-hidden="true">R$</span><input id="fechamentoDinheiro" name="valor" value="0,00" inputmode="decimal" autocomplete="off" required aria-label="Dinheiro contado na gaveta"></div><div class="fechamento-observacao" id="fechamentoObservacao" hidden><label class="fechamento-campo" for="fechamentoMotivo">Observação da conferência</label><textarea name="motivo" id="fechamentoMotivo" minlength="3"></textarea><p>A diferença fica registrada. A próxima abertura mantém o saldo calculado pelo sistema.</p></div><p class="fechamento-erro" id="fechamentoErro" role="alert" hidden></p><button type="submit" class="fechamento-enviar">Fechar caixa</button></form>`;
+    box.innerHTML=`<form id="formFechamentoCaixa"><h1 class="fechamento-titulo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 4h10v16H9M3 12h11m-4-4 4 4-4 4"/></svg>Fechamento de caixa</h1><p class="fechamento-subtitulo">Informe os valores</p><label class="fechamento-campo" for="fechamentoDinheiro">Dinheiro</label><div class="fechamento-dinheiro"><span aria-hidden="true">R$</span><input id="fechamentoDinheiro" name="valor" value="0,00" inputmode="decimal" autocomplete="off" required aria-label="Dinheiro contado na gaveta"></div><p class="fechamento-erro" id="fechamentoErro" role="alert" hidden></p><button type="submit" class="fechamento-enviar">Fechar caixa</button></form>`;
     const f=box.querySelector('form'),erro=box.querySelector('#fechamentoErro'),b=f.querySelector('[type="submit"]');
     f.elements.valor.onblur=()=>{try{f.elements.valor.value=new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false}).format(PdvMoney.centavos(f.elements.valor.value)/100);}catch(e){erro.hidden=false;erro.textContent=e.message;}};
     f.onsubmit=e=>{e.preventDefault();acao(async()=>{b.disabled=true;erro.hidden=true;try{
       if(cart.itens.length)throw Error('Conclua ou limpe a venda em andamento primeiro.');
       const contado=PdvMoney.centavos(f.elements.valor.value);await semPendencias();await atualizar();if(!estado.aberto)throw Error('O caixa já foi fechado.');
-      const justificativa=f.elements.motivo.value.trim();
-      if(contado!==estado.aberto.esperado&&justificativa.length<3){box.querySelector('#fechamentoObservacao').hidden=false;f.elements.motivo.required=true;erro.hidden=false;erro.textContent='Há diferença na conferência. Informe uma observação para concluir o fechamento.';f.elements.motivo.focus();return;}
+      const justificativa=contado===estado.aberto.esperado?'':'Diferença apurada na contagem física; motivo não informado.';
       const fechamento=await api('pdvFechar',{sessaoId:estado.aberto.id,contado,justificativa});
       estado={aberto:null,ultimo:fechamento};go('caixa');toast('Fechamento registrado. Imprimindo relatório.');imprimir(fechamento);
     }catch(e){erro.hidden=false;erro.textContent=e.message;throw e;}finally{b.disabled=false;}});};
