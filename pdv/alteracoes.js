@@ -10,6 +10,13 @@ const PdvAlteracoes=(()=>{
     if(v.status==='cancelada'){toast('Esta venda já foi excluída.');return;}
     if(cart.itens.length){toast('Conclua ou limpe a venda em andamento antes de corrigir outra.');return;}
     if(v.alteracaoPendente){tipo=v.alteracaoPendente.tipo;}
+    // venda que nunca entrou no Bling (ex.: recusada por número repetido): o servidor não a conhece, então a exclusão é feita só aqui no PDV
+    if(tipo==='excluir'&&!v.bling&&v.status!=='enviada'){
+      if(!PdvCaixa.admin()){toast('Esta venda não chegou ao Bling. Entre no PDV como Master ou Administrador para excluí-la.');return;}
+      if(!confirm('Excluir a venda '+v.numero+' ('+R$(v.total)+')?\nEla não chegou ao Bling, então será removida só deste PDV.'))return;
+      delete v.alteracaoPendente;v.status='cancelada';v.erro='';v.descarteLocal={em:new Date().toISOString(),por:(PdvCaixa.usuario&&PdvCaixa.usuario.nome)||'',motivo:'Venda não enviada ao Bling, excluída no PDV'};
+      await DB.put('vendas',v);updateQueue();await renderVendas();try{await PdvCaixa.atualizar()}catch(e){}toast('Venda excluída deste PDV.');return;
+    }
     const retomar=!!v.alteracaoPendente,editar=tipo==='editar',modal=document.createElement('div');modal.className='modal';modal.id='mAlterarVenda';
     const itemRow=i=>`<tr data-produto="${esc(i.produtoId)}"><td>${esc(i.nome)}<input type="checkbox" aria-label="Remover ${esc(i.nome)}" data-remover> Remover</td><td><input aria-label="Quantidade ${esc(i.nome)}" data-qtd value="${esc(String(i.qtd).replace('.',','))}" inputmode="decimal" required></td><td><input aria-label="Preço ${esc(i.nome)}" data-preco value="${decimal(i.preco)}" inputmode="decimal" required></td><td><input aria-label="Desconto percentual ${esc(i.nome)}" data-desconto value="${String(i.descPct||0).replace('.',',')}" inputmode="decimal" required></td></tr>`;
     const pagamentoRow=p=>`<div class="alteracao-pagamento"><select aria-label="Forma de pagamento">${CAT.formas.map(f=>`<option value="${esc(f.id)}" ${String(f.id)===String(p.formaId)?'selected':''}>${esc(f.nome)}</option>`).join('')}</select><input aria-label="Valor do pagamento" data-valor value="${decimal(p.valorLiquido||0)}" inputmode="decimal"><button type="button" data-tirar-pagamento>Remover</button></div>`;
