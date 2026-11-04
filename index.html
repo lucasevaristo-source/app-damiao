@@ -356,8 +356,12 @@ const ICAT={
   'Outros':'<svg viewBox="0 0 64 64"><path d="M32 6 8 18v28l24 12 24-12V18z" fill="#c49a6c"/><path d="M8 18l24 12 24-12M32 30v28" stroke="#9c7a52" stroke-width="2" fill="none"/></svg>'
 };
 const iconeProduto=p=>ICAT[p.categoria]||ICAT['Outros'];
+/* fotos guardadas no site (vieram do Meu Ecomm), por código do produto no Bling */
+let FOTOS=null;
+async function carregarFotos(){if(FOTOS)return FOTOS;try{FOTOS=await fetch('img/produtos/fotos.json').then(r=>r.ok?r.json():{})}catch(e){FOTOS={}}return FOTOS}
+const fotoProduto=p=>p.imagem||(FOTOS&&FOTOS[p.codigo])||'';
 function prepararCatalogo(cat){
-  cat.produtos.forEach(p=>{p.nomeBling=p.nome;p.nome=nomeLoja(p.nome);if(!p.categoria)p.categoria=categoriaAuto(p.nomeBling)});
+  cat.produtos.forEach(p=>{p.nomeBling=p.nome;p.nome=nomeLoja(p.nome);if(!p.categoria)p.categoria=categoriaAuto(p.nomeBling);p.imagem=fotoProduto(p)});
   const usadas=[...new Set(cat.produtos.map(p=>p.categoria))];
   cat.categorias=usadas.sort((a,b)=>{const ia=ORDEM_CAT.indexOf(a),ib=ORDEM_CAT.indexOf(b);return (ia<0?50:ia)-(ib<0?50:ib)||a.localeCompare(b,'pt')});
   return cat;
@@ -400,7 +404,7 @@ async function iniciarLoja(){
   if($('#hPed'))$('#hPed').onclick=abrirMeusPedidos;
   if($('#hConta'))$('#hConta').onclick=abrirConta;
   salvarCarrinho();
-  try{CAT=prepararCatalogo(await api('catalogoLoja',{},true));renderCats();renderGrade();
+  try{const[c]=await Promise.all([api('catalogoLoja',{},true),carregarFotos()]);CAT=prepararCatalogo(c);renderCats();renderGrade();
     // atualiza preço do carrinho conforme a tabela do cliente
     CART=CART.filter(i=>CAT.produtos.some(p=>p.id===i.produtoId));salvarCarrinho();
   }catch(e){$('#grade').innerHTML=`<div class="empty" style="grid-column:1/-1"><b>Não foi possível carregar</b>${esc(e.message)}</div>`}
@@ -723,7 +727,7 @@ async function vProdutos(){
   const g=GESTAO();
   M().innerHTML=`<div class="ph"><div><h1>Produtos</h1><p>Vêm do Bling (atualização automática a cada hora). ${g?'Aqui você organiza como aparecem na loja.':''}</p></div>${g?'<button class="btn o sm" id="pat">Atualizar do Bling agora</button>':''}</div>
   <div class="toolbar"><input class="inp" id="pb2" placeholder="Buscar produto" aria-label="Buscar"><select class="inp" id="pc2" style="flex:0 0 220px" aria-label="Categoria"></select></div><div class="scroll" id="ptab"><div class="empty"><b>Carregando…</b></div></div>`;
-  let cat;try{cat=await api('produtosPainel',{},true)}catch(e){falha(e);return}
+  let cat;try{[cat]=await Promise.all([api('produtosPainel',{},true),carregarFotos()]);cat.produtos.forEach(p=>p.imagem=fotoProduto(p))}catch(e){falha(e);return}
   $('#pc2').innerHTML='<option value="">Todas as categorias</option><option value="-">Sem categoria</option>'+cat.categorias.map(c=>`<option>${esc(c)}</option>`).join('');
   const r=()=>{const ws=norm($('#pb2').value).split(/\s+/).filter(Boolean),fc=$('#pc2').value;const l=cat.produtos.filter(p=>ws.every(w=>norm(p.nome+' '+p.codigo).includes(w))&&(!fc||(fc==='-'?!p.categoria:p.categoria===fc)));
     $('#ptab').innerHTML=`<table class="t"><thead><tr><th></th><th>Produto</th><th>Categoria</th><th class="r">Preço Bling</th><th>Na loja</th></tr></thead><tbody>${l.map(p=>`<tr class="${g?'click':''}" data-id="${p.id}"><td style="width:52px">${p.imagem?`<img src="${esc(p.imagem)}" alt="" style="width:40px;height:40px;object-fit:contain;border-radius:6px;background:#fff">`:'<span style="display:block;width:40px;height:40px">'+ICON.pao+'</span>'}</td><td><b>${esc(p.nome)}</b><div style="font-size:12px;color:var(--muted)">${esc(p.codigo)}${p.marca?' · '+esc(p.marca):''}</div></td><td>${esc(p.categoria||'—')}</td><td class="r num">${R$(p.precoBase)}</td><td>${p.oculto?'<span class="pill p-bad">Oculto</span>':p.precoBase>0?'<span class="pill p-ok">Visível</span>':'<span class="pill p-wait">Sem preço</span>'}${p.destaque?' <span class="pill p-wait">★</span>':''}</td></tr>`).join('')}</tbody></table>`};
