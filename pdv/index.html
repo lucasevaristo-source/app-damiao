@@ -965,7 +965,10 @@ const Sync={
             itens:v.itens.map(i=>({produtoId:i.produtoId,codigo:i.codigo,nome:i.nome,unidade:i.unidade,qtd:i.qtd,valor:i.preco/100,precoOriginal:(i.precoOriginal??i.preco)/100,descontoPct:i.descPct||0})),
             desconto:(v.subtotal-v.total)/100,total:v.total/100,pagamentos:v.pagamentos.map(p=>({formaId:p.formaId,valor:p.valorLiquido/100})),fiscal:v.fiscal.modo}});
           v.status='enviada';v.erro='';v.bling={pedidoId:j.pedidoId,numero:j.numero};
-        }catch(e){v.status='erro';v.erro=String(e.message||e);v.tentativas++;if(!navigator.onLine){await DB.put('vendas',v);break}}
+        }catch(e){v.status='erro';v.erro=String(e.message||e);v.tentativas++;
+          // número repetido (ex.: PDV aberto em outro navegador/perfil começou a contagem do zero): pula a numeração e reenvia com número novo
+          if(/n[uú]mero de venda j[aá] usado/i.test(v.erro)&&(v.renumeracoes||0)<10){const m=await DB.get('meta','seq');await DB.put('meta',{id:'seq',v:(m?m.v:0)+1000});v.numeroOriginal=v.numeroOriginal||v.numero;v.numero=await nextNumero();v.renumeracoes=(v.renumeracoes||0)+1;v.status='pendente';v.erro='';v.tentativas=Math.max(0,v.tentativas-1);setTimeout(()=>Sync.enviar().catch(()=>{}),1500)}
+          if(!navigator.onLine){await DB.put('vendas',v);break}}
         await DB.put('vendas',v);
       }
     }finally{this.busy=false;updateQueue();if(screen==='vendas')renderVendas();if(PdvCaixa.autenticado&&navigator.onLine)PdvCaixa.atualizar().catch(()=>{});}
