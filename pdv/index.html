@@ -374,7 +374,7 @@ table.list{width:100%;border-collapse:collapse}
           <button class="list-tile" style="background:var(--teal)" data-act="caixa"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v12H3zm2 2v8h14V8zm7 1.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z" fill-rule="evenodd"/></svg>Caixa do dia<b>(C)</b></button>
           <button class="list-tile" style="background:var(--teal2)" data-act="enviar"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8l-4 4h3a6 6 0 0 1-8.8 5.3l-1.5 1.5A8 8 0 0 0 20 12h3zM6 12a6 6 0 0 1 8.8-5.3l1.5-1.5A8 8 0 0 0 4 12H1l4 4 4-4z"/></svg>Enviar ao Bling<b>(E)</b></button>
           <button class="list-tile" style="background:var(--dark)" data-act="atualizar"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5zM12 16l5-5h-3V4h-4v7H7z"/></svg>Atualizar produtos<b>(P)</b></button>
-          <button class="list-tile" style="background:var(--grey)" data-act="fechamento"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12v6H6zM4 9h16a2 2 0 0 1 2 2v6h-4v5H6v-5H2v-6a2 2 0 0 1 2-2zm4 8v3h8v-3z"/></svg>Imprimir fechamento<b>(F)</b></button>
+          <button class="list-tile" style="background:var(--grey)" data-act="fechamento"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12v6H6zM4 9h16a2 2 0 0 1 2 2v6h-4v5H6v-5H2v-6a2 2 0 0 1 2-2zm4 8v3h8v-3z"/></svg>Fechar caixa<b>(F)</b></button>
           <button class="list-tile" style="background:var(--slate)" data-act="ajustes"><svg viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a7 7 0 0 0-1.7-1L14.9 3.3h-4l-.4 2.7a7 7 0 0 0-1.7 1l-2.5-1-2 3.4L6.4 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1c.5.4 1.1.8 1.7 1l.4 2.7h4l.4-2.7c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.4zM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>Configurações<b>(S)</b></button>
         </div>
       </div>
@@ -549,6 +549,7 @@ table.list{width:100%;border-collapse:collapse}
 
 <script src="caixa-core.js"></script>
 <script src="caixa.js"></script>
+<script src="alteracoes.js"></script>
 <script>
 'use strict';
 /* ================= utilidades ================= */
@@ -640,7 +641,7 @@ $$('[data-act]').forEach(b=>b.onclick=()=>homeAct(b.dataset.act));
 function homeAct(a){
   if(a==='balcao')go('balcao');else if(a==='cliente')pickCliente();else if(a==='vendedor')pickVendedor();
   else if(a==='vendas')go('vendas');else if(a==='caixa')go('caixa');else if(a==='ajustes')go('ajustes');
-  else if(a==='enviar')enviarAgora();else if(a==='atualizar')atualizarCatalogo();else if(a==='fechamento')PdvCaixa.imprimirAtual();
+  else if(a==='enviar')enviarAgora();else if(a==='atualizar')atualizarCatalogo();else if(a==='fechamento')PdvCaixa.fechamento();
 }
 function tick(){const d=new Date();$('#clock').innerHTML=d.toLocaleDateString('pt-BR')+'<br>'+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
 tick();setInterval(tick,15000);
@@ -953,13 +954,14 @@ const Sync={
     await DB.put('meta',{id:'sync',v:{em:new Date().toISOString(),demo:false,versao:j.versao||''}});
     await loadCat();return prods.length;
   },
-  async enviar(){
+  async enviar(jaTravado=false){return jaTravado?this.enviarInterno():PdvCaixa.lock(()=>this.enviarInterno());},
+  async enviarInterno(){
     if(this.busy||!CFG.url||!navigator.onLine||!PdvCaixa.autenticado)return;this.busy=true;
     try{
-      const pend=(await DB.all('vendas')).filter(v=>v.caixaSessaoId&&(v.status==='pendente'||(v.status==='erro'&&v.tentativas<20))).sort((a,b)=>a.criadaEm.localeCompare(b.criadaEm));
+      const pend=(await DB.all('vendas')).filter(v=>!v.alteracaoPendente&&v.caixaSessaoId&&(v.status==='pendente'||(v.status==='erro'&&v.tentativas<20))).sort((a,b)=>a.criadaEm.localeCompare(b.criadaEm));
       for(const v of pend){
         try{
-          const j=await this.req('venda',{venda:{id:v.id,caixaSessaoId:v.caixaSessaoId,anteriorAoCaixa:!!v.anteriorAoCaixa,operadorOriginal:v.operadorOriginal,caixa:v.caixa,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
+          const j=await this.req('venda',{venda:{id:v.id,revisao:v.revisao||0,caixaSessaoId:v.caixaSessaoId,anteriorAoCaixa:!!v.anteriorAoCaixa,operadorOriginal:v.operadorOriginal,caixa:v.caixa,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
             itens:v.itens.map(i=>({produtoId:i.produtoId,codigo:i.codigo,nome:i.nome,unidade:i.unidade,qtd:i.qtd,valor:i.preco/100,precoOriginal:(i.precoOriginal??i.preco)/100,descontoPct:i.descPct||0})),
             desconto:(v.subtotal-v.total)/100,total:v.total/100,pagamentos:v.pagamentos.map(p=>({formaId:p.formaId,valor:p.valorLiquido/100})),fiscal:v.fiscal.modo}});
           v.status='enviada';v.erro='';v.bling={pedidoId:j.pedidoId,numero:j.numero};
@@ -1007,17 +1009,15 @@ async function renderVendas(){
    (vs.map(v=>`<tr><td class="num">${esc(v.numero)}</td><td class="num">${new Date(v.criadaEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td>
    <td>${esc(v.cliente?(v.cliente.fantasia||v.cliente.nome):'Consumidor final')}</td><td>${esc(v.pagamentos.map(p=>p.nome).join(' + '))}</td>
    <td class="r num">${R$(v.total)}</td><td><span class="tag ${v.status}">${statusTxt(v.status)}${v.bling&&v.bling.numero?' · nº '+esc(v.bling.numero):''}</span>${v.erro?`<div class="hint" style="white-space:normal;max-width:280px">${esc(v.erro)}</div>`:''}</td>
-   <td><button class="lnk" data-ver="${v.id}">Ver</button>${(v.status==='pendente'||v.status==='erro'||v.status==='demo')?`<button class="lnk" style="color:var(--red)" data-canc="${v.id}">Cancelar</button>`:''}</td></tr>`).join('')||
+   <td><button class="lnk" data-ver="${v.id}">Ver</button>${v.status!=='cancelada'?`<button class="lnk" data-edit="${v.id}">${v.alteracaoPendente?'Retomar correção':'Editar'}</button><button class="lnk" style="color:var(--red)" data-excluir="${v.id}">Excluir</button>`:''}</td></tr>`).join('')||
    '<tr><td colspan="7"><div class="nada" style="padding:24px">Nenhuma venda nesta data</div></td></tr>')+'</tbody>';
 }
 $('#fData').onchange=renderVendas;$('#fStatus').onchange=renderVendas;$('#btnSend').onclick=enviarAgora;
 $('#tVendas').addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.ver)showReceipt(await DB.get('vendas',b.dataset.ver),false);
-  if(b.dataset.canc){const v=await DB.get('vendas',b.dataset.canc);
-    if(!v||!PdvCaixa.diaPermitido(v.dia)){toast('Seu acesso permite somente vendas de hoje.');return;}
-    confirmar('Cancelar a venda '+v.numero+' ('+R$(v.total)+')?',async()=>{const x=await DB.get('vendas',v.id);if(x.status==='enviada'){toast('Já está no Bling. Cancele por lá.');return}
-      x.status='cancelada';await DB.put('vendas',x);updateQueue();renderVendas();toast('Venda '+x.numero+' cancelada')})}
+  if(b.dataset.edit)PdvAlteracoes.abrir(b.dataset.edit,'editar');
+  if(b.dataset.excluir)PdvAlteracoes.abrir(b.dataset.excluir,'excluir');
 });
 
 /* ================= caixa do dia ================= */
