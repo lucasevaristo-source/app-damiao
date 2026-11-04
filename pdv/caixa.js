@@ -26,7 +26,7 @@ const PdvCaixa=(()=>{
     }catch(x){bloquear(x.message);}finally{b.disabled=false;}};
     bloquear();
   }
-  async function semPendencias(){await Sync.enviar();const p=(await DB.all('vendas')).filter(v=>v.status==='pendente'||v.status==='erro');if(p.length)throw Error('Existem '+p.length+' venda(s) sem confirmação no Bling. Envie ou resolva os erros antes de movimentar ou fechar o caixa.');}
+  async function semPendencias(){await Sync.enviar(true);const p=(await DB.all('vendas')).filter(v=>v.alteracaoPendente||v.status==='pendente'||v.status==='erro');if(p.length)throw Error('Existem '+p.length+' venda(s) sem confirmação no Bling. Envie ou resolva os erros antes de movimentar ou fechar o caixa.');}
   async function abrir(){
     await atualizar();const anteriores=(await DB.all('vendas')).filter(v=>!v.caixaSessaoId&&['pendente','erro','enviada'].includes(v.status)&&v.caixa===CFG.caixa);
     if(anteriores.length){
@@ -34,7 +34,7 @@ const PdvCaixa=(()=>{
       if(anteriores.some(v=>v.dia!==today()))throw Error('Há vendas de outros dias sem caixa. Solicite a conferência pelo Master.');
       const c=estado.aberto||await api('pdvAbrir',{caixa:CFG.caixa});await atualizar();
       for(const v of anteriores){v.caixaSessaoId=c.id;v.anteriorAoCaixa=true;v.operadorOriginal=v.operador;v.status='pendente';v.tentativas=0;v.erro='';await DB.put('vendas',v);}
-      await Sync.enviar();await render();toast('Caixa aberto. Vendas anteriores vinculadas para conferência e envio sem duplicar.');return;
+      await Sync.enviar(true);await render();toast('Caixa aberto. Vendas anteriores vinculadas para conferência e envio sem duplicar.');return;
     }
     await semPendencias();await api('pdvAbrir',{caixa:CFG.caixa});await render();
   }
@@ -103,5 +103,5 @@ const PdvCaixa=(()=>{
     printHTML(relatorioHTML(c));
   }
   async function imprimirAtual(){try{await atualizar();const c=estado.aberto||estado.ultimo;if(!c)throw Error('Nenhum caixa registrado.');imprimir(c);}catch(e){toast(e.message);}}
-  return {iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
+  return {alterarVenda:d=>api('pdvAlterarVenda',d),iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
 })();
