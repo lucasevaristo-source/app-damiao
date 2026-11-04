@@ -22,6 +22,10 @@ body.pdv-locked .app{visibility:hidden;pointer-events:none}#pdvLogin{position:fi
 .fechamento-observacao p{font-size:13px;line-height:1.5;color:#666}
 @media(max-width:600px){.fechamento-pagina{padding:24px 16px}.fechamento-titulo{font-size:25px}}
 .pdv-fechamento #pdvOperadorBar{display:none}
+#mAlterarVenda form{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#mAlterarVenda label{display:grid;gap:6px}#mAlterarVenda input,#mAlterarVenda select,#mAlterarVenda textarea{padding:9px;border:1px solid #bcc9df;border-radius:5px;font:inherit;min-width:0;max-width:100%}
+#mAlterarVenda input[type="checkbox"]{margin-left:8px}#mAlterarVenda textarea{min-height:65px}
+.alteracao-tabela{overflow:auto}.alteracao-tabela table{border-collapse:collapse;width:100%}.alteracao-tabela th,.alteracao-tabela td{padding:7px;text-align:left;border-bottom:1px solid #dfe5f2}.alteracao-tabela input:not([type="checkbox"]){width:100px}.alteracao-pagamento{display:flex;gap:8px;margin:6px 0}.alteracao-pagamento input{width:130px}.alteracao-pagamento button{color:#b91c1c}#alteracaoErro{color:#b91c1c;white-space:pre-wrap;line-height:1.4}
 .fechamento-recibo{font-family:"Courier New",monospace;font-size:9pt;line-height:1.15;color:#000;font-weight:400}
 .fechamento-recibo header{text-align:center;font-size:8pt;margin:3mm 0 2mm;overflow-wrap:anywhere}
 .fr-titulo{text-align:center;font-size:11pt;font-weight:400;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:2mm 0;margin:2mm 0}
