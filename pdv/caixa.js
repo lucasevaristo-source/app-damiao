@@ -58,20 +58,50 @@ const PdvCaixa=(()=>{
     p.querySelectorAll('[data-caixa]').forEach(b=>b.onclick=()=>{const tipo=b.dataset.caixa;if(tipo==='imprimir'){imprimir(c);return;}if(tipo==='atualizar'){acao(render);return;}if(tipo==='abrir'){acao(abrir);return;}formulario(tipo);});
     if(ab&&admin()&&!estado.ultimo){const antigas=(await DB.all('vendas')).filter(v=>!v.caixaSessaoId&&v.caixa===CFG.caixa&&['pendente','erro','enviada'].includes(v.status));if(antigas.length){const b=document.createElement('button');b.className='btn';b.textContent='Conferir '+antigas.length+' venda(s) anteriores ao novo controle';b.onclick=()=>acao(abrir);p.append(b);}}
   }
-  function formulario(tipo){const fechar=tipo==='fechar',id=uid(),box=document.querySelector('#caixaFormulario');box.innerHTML=`<form class="caixa-form"><h3>${fechar?'Conferir e fechar o caixa':tipo==='sangria'?'Retirada de dinheiro — sangria':'Entrada de dinheiro — suprimento'}</h3><label>${fechar?'Dinheiro contado na gaveta (R$)':'Valor em dinheiro (R$)'}<input name="valor" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label><label>${fechar?'Observação da conferência (obrigatória se houver diferença)':'Motivo do movimento'}<textarea name="motivo" ${fechar?'':'required minlength="3"'}></textarea></label><p>${fechar?'O saldo do sistema será mantido para a próxima abertura, mesmo se o contado for diferente.':'Este movimento registra somente dinheiro físico. Não altera PIX, cartão ou contas no Bling.'}</p><button class="btn" type="submit">${fechar?'Confirmar fechamento':'Confirmar movimento'}</button><button class="btn" type="button" data-cancel>Voltar sem registrar</button></form>`;box.querySelector('[data-cancel]').onclick=()=>box.replaceChildren();box.querySelector('form').onsubmit=e=>{e.preventDefault();const f=e.currentTarget,motivo=f.elements.motivo.value;acao(async()=>{const valor=PdvMoney.centavos(f.elements.valor.value);if(cart.itens.length)throw Error('Conclua ou limpe a venda em andamento primeiro.');await semPendencias();await atualizar();if(!estado.aberto)throw Error('O caixa já foi fechado.');let fechamento=null;if(fechar)fechamento=await api('pdvFechar',{sessaoId:estado.aberto.id,contado:valor,justificativa:motivo});else await api('pdvMovimento',{id,sessaoId:estado.aberto.id,tipo,valor,motivo});await render();toast(fechar?'Fechamento registrado. Abrindo impressão.':'Movimento registrado.');if(fechamento)imprimir(fechamento);});};box.querySelector('input').focus();}
+  function abrirFechamento(){
+    if(!usuario||Date.now()>expira){bloquear('Entre novamente para continuar.');return;}
+    if(!estado.aberto){toast('Abra o caixa antes de acessar o fechamento.');go('caixa');return;}
+    go('fechamento');const box=document.querySelector('#fechamentoConteudo');
+    box.innerHTML=`<form id="formFechamentoCaixa"><h1 class="fechamento-titulo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 4h10v16H9M3 12h11m-4-4 4 4-4 4"/></svg>Fechamento de caixa</h1><p class="fechamento-subtitulo">Informe os valores</p><label class="fechamento-campo" for="fechamentoDinheiro">Dinheiro</label><div class="fechamento-dinheiro"><span aria-hidden="true">R$</span><input id="fechamentoDinheiro" name="valor" value="0,00" inputmode="decimal" autocomplete="off" required aria-label="Dinheiro contado na gaveta"></div><div class="fechamento-observacao" id="fechamentoObservacao" hidden><label class="fechamento-campo" for="fechamentoMotivo">Observação da conferência</label><textarea name="motivo" id="fechamentoMotivo" minlength="3"></textarea><p>A diferença fica registrada. A próxima abertura mantém o saldo calculado pelo sistema.</p></div><p class="fechamento-erro" id="fechamentoErro" role="alert" hidden></p><button type="submit" class="fechamento-enviar">Fechar caixa</button></form>`;
+    const f=box.querySelector('form'),erro=box.querySelector('#fechamentoErro'),b=f.querySelector('[type="submit"]');
+    f.elements.valor.onblur=()=>{try{f.elements.valor.value=new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false}).format(PdvMoney.centavos(f.elements.valor.value)/100);}catch(e){erro.hidden=false;erro.textContent=e.message;}};
+    f.onsubmit=e=>{e.preventDefault();acao(async()=>{b.disabled=true;erro.hidden=true;try{
+      if(cart.itens.length)throw Error('Conclua ou limpe a venda em andamento primeiro.');
+      const contado=PdvMoney.centavos(f.elements.valor.value);await semPendencias();await atualizar();if(!estado.aberto)throw Error('O caixa já foi fechado.');
+      const justificativa=f.elements.motivo.value.trim();
+      if(contado!==estado.aberto.esperado&&justificativa.length<3){box.querySelector('#fechamentoObservacao').hidden=false;f.elements.motivo.required=true;erro.hidden=false;erro.textContent='Há diferença na conferência. Informe uma observação para concluir o fechamento.';f.elements.motivo.focus();return;}
+      const fechamento=await api('pdvFechar',{sessaoId:estado.aberto.id,contado,justificativa});
+      estado={aberto:null,ultimo:fechamento};go('caixa');toast('Fechamento registrado. Imprimindo relatório.');imprimir(fechamento);
+    }catch(e){erro.hidden=false;erro.textContent=e.message;throw e;}finally{b.disabled=false;}});};
+    f.elements.valor.focus();f.elements.valor.select();
+  }
+  function formulario(tipo){
+    if(tipo==='fechar'){abrirFechamento();return;}
+    const id=uid(),box=document.querySelector('#caixaFormulario');
+    box.innerHTML=`<form class="caixa-form"><h3>${tipo==='sangria'?'Retirada de dinheiro — sangria':'Entrada de dinheiro — suprimento'}</h3><label>Valor em dinheiro (R$)<input name="valor" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label><label>Motivo do movimento<textarea name="motivo" required minlength="3"></textarea></label><p>Este movimento registra somente dinheiro físico. Não altera PIX, cartão ou contas no Bling.</p><button class="btn" type="submit">Confirmar movimento</button><button class="btn" type="button" data-cancel>Voltar sem registrar</button></form>`;
+    box.querySelector('[data-cancel]').onclick=()=>box.replaceChildren();
+    box.querySelector('form').onsubmit=e=>{e.preventDefault();const f=e.currentTarget;acao(async()=>{const valor=PdvMoney.centavos(f.elements.valor.value);if(cart.itens.length)throw Error('Conclua ou limpe a venda em andamento primeiro.');await semPendencias();await atualizar();if(!estado.aberto)throw Error('O caixa já foi fechado.');await api('pdvMovimento',{id,sessaoId:estado.aberto.id,tipo,valor,motivo:f.elements.motivo.value});await render();toast('Movimento registrado.');});};box.querySelector('input').focus();
+  }
+  function relatorioHTML(c){
+    const fechado=c.status==='fechado',mov=c.movimentos||[],dif=fechado?c.contado-c.esperado:null;
+    const formas=Object.entries(c.formas||{}).filter(([n])=>!/dinheiro/i.test(n));
+    const total=c.inicial+c.totalVendas+c.suprimentos-c.sangrias;
+    const linha=(n,v)=>'<div class="fr-linha"><span>'+esc(n)+'</span><span>'+esc(String(v))+'</span></div>';
+    const titulo=t=>'<div class="fr-titulo">'+t+'</div>';
+    const valor=v=>v==null?'—':R$(v);
+    const metodos=[{nome:'Dinheiro',informado:fechado?c.contado:null,registrado:c.esperado},...formas.map(([nome,v])=>({nome,informado:null,registrado:v}))];
+    return '<article class="fechamento-recibo"><header>'+esc(String(CFG.cabecalho)).replaceAll('\n','<br>')+'</header>'+titulo('VALORES DE FECHAMENTO<br>'+(fechado?'FECHAMENTO DE CAIXA':'CONFERÊNCIA — CAIXA ABERTO'))+
+    [['PDV:',c.caixa],['Caixa:',c.operador],['Abertura:',dtBR(c.abertoEm)],...(c.fechadoEm?[['Fechamento:',dtBR(c.fechadoEm)]]:[]),['Valor de abertura:',R$(c.inicial)],['Valor de fechamento:',R$(c.esperado)],['Valor de venda (Dinheiro):',R$(c.vendasDinheiro)],['Total de vendas:',mov.filter(m=>m.tipo==='venda').length]].map(([n,v])=>linha(n,v)).join('')+
+    titulo('RESULTADO OPERACIONAL')+[['FATURAMENTO BRUTO:',c.totalVendas],['(+) Valor de abertura:',c.inicial],['(+) Suprimentos:',c.suprimentos],['(-) Sangrias:',c.sangrias],['RESULTADO OPERACIONAL:',total]].map(([n,v])=>linha(n,R$(v))).join('')+
+    titulo('VALORES INFORMADOS')+'<table class="fr-tabela"><thead><tr><th>Método</th><th>Informado</th><th>Registrado</th></tr></thead><tbody>'+metodos.map(l=>'<tr><td>'+esc(l.nome)+'</td><td>'+valor(l.informado)+'</td><td>'+valor(l.registrado)+'</td></tr>').join('')+'</tbody><tfoot><tr><td>TOTAL</td><td>'+ (metodos.length===1?valor(fechado?c.contado:null):'—') +'</td><td>'+R$(total)+'</td></tr></tfoot></table><p class="fr-nota">— = valor não informado. Dinheiro registrado: saldo da gaveta; demais formas: vendas.</p>'+
+    (fechado?linha('DIFERENÇA EM DINHEIRO',R$(dif))+'<p class="fr-resultado">'+(dif===0?'CONFERIDO — valor informado bate com o sistema':(dif<0?'FALTA: ':'SOBRA: ')+R$(Math.abs(dif)))+'</p><p class="fr-nota">Próxima abertura pelo sistema: '+R$(c.esperado)+'</p>':'')+
+    titulo('SANGRIAS E SUPRIMENTOS')+(mov.filter(m=>m.tipo==='sangria'||m.tipo==='suprimento').map(m=>'<div class="fr-mov">'+linha(m.tipo==='sangria'?'Sangria':'Suprimento',R$(m.valor))+'<div>'+dtBR(m.em)+' · '+esc(m.operador)+'</div><div>'+esc(m.motivo)+'</div></div>').join('')||'<p class="fr-nota">Sem sangrias ou suprimentos.</p>')+
+    '<div class="fr-assinatura">Assinatura:<div></div><p>'+esc(c.operador)+'</p></div><footer>PDV Damião<span>Impresso: '+dtBR(new Date().toISOString())+'</span></footer></article>';
+  }
   function imprimir(c){
     if(c.saldoAnterior){toast('Somente o Master consulta relatórios de outros dias.');return;}
-    const fechado=c.status==='fechado',dif=+c.diferenca||0,resultado=dif===0?'CONFERIDO — valor informado confere com o sistema':(dif<0?'FALTA de ':'SOBRA de ')+R$(Math.abs(dif));
-    printHTML(`<div class="c"><b>${esc(String(CFG.cabecalho).split('\n')[0])}</b></div><div class="tt">${fechado?'RELATÓRIO DO DIA — FECHAMENTO DE CAIXA':'CONFERÊNCIA — CAIXA ABERTO'}</div>
-    <p>Caixa: ${esc(c.caixa)}<br>Operador: ${esc(c.operador)}<br>Abertura: ${dtBR(c.abertoEm)}${c.fechadoEm?'<br>Fechamento: '+dtBR(c.fechadoEm):''}</p><div class="sep"></div>
-    ${[['Valor de abertura',c.inicial],['Suprimentos',c.suprimentos],['Sangrias',-c.sangrias]].map(([n,v])=>`<div class="ln"><span>${n}</span><b>${R$(v)}</b></div>`).join('')}
-    <div class="sep"></div><b>VENDAS POR FORMA DE PAGAMENTO</b>${Object.entries(c.formas||{}).map(([n,v])=>`<div class="ln"><span>${esc(n)}</span><b>${R$(v)}</b></div>`).join('')||'<p>Sem vendas neste caixa.</p>'}
-    <div class="ln"><b>Valor total de vendas</b><b>${R$(c.totalVendas)}</b></div><div class="ln"><span>Vendas em dinheiro, líquido de troco</span><b>${R$(c.vendasDinheiro)}</b></div>
-    <div class="sep"></div><div class="ln"><b>Saldo em caixa pelo sistema</b><b>${R$(c.esperado)}</b></div>
-    ${fechado?`<div class="ln"><span>Dinheiro informado / contado</span><b>${R$(c.contado)}</b></div><div class="ln"><span>Diferença</span><b>${R$(dif)}</b></div><p><b>${esc(resultado)}</b></p><p>Saldo mantido para a próxima abertura: ${R$(c.esperado)}</p>`:''}
-    <div class="sep"></div><b>MOVIMENTOS DE DINHEIRO</b>${c.movimentos.filter(m=>m.tipo!=='venda').map(m=>`<p>${dtBR(m.em)} · ${esc(m.tipo)} · ${R$(m.valor)}<br>${esc(m.motivo)} · ${esc(m.operador)}</p>`).join('')||'<p>Sem sangrias ou suprimentos.</p>'}
-    <p style="margin-top:24px">________________________________<br>Assinatura do operador do caixa<br>${esc(c.operador)}</p><p class="sm">Impresso em ${dtBR(new Date().toISOString())}</p>`);
+    printHTML(relatorioHTML(c));
   }
   async function imprimirAtual(){try{await atualizar();const c=estado.aberto||estado.ultimo;if(!c)throw Error('Nenhum caixa registrado.');imprimir(c);}catch(e){toast(e.message);}}
-  return {iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
+  return {iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
 })();
