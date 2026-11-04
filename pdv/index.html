@@ -447,6 +447,11 @@ table.list{width:100%;border-collapse:collapse}
       </div></div>
     </section>
 
+    <!-- FECHAMENTO DE CAIXA -->
+    <section class="screen" id="s-fechamento" hidden>
+      <div class="fechamento-pagina" id="fechamentoConteudo"></div>
+    </section>
+
     <!-- CONFIGURAÇÕES -->
     <section class="screen" id="s-ajustes" hidden>
       <div class="pagewrap"><div class="pg">
@@ -615,11 +620,12 @@ function precoDe(p){
 }
 
 /* ================= telas ================= */
-const TITLES={inicio:'Início',balcao:'Balcão',pagamento:'Pagamento',vendas:'Últimas vendas',caixa:'Caixa do dia',ajustes:'Configurações'};
+const TITLES={inicio:'Início',balcao:'Balcão',pagamento:'Pagamento',vendas:'Últimas vendas',caixa:'Caixa do dia',fechamento:'Fechar caixa',ajustes:'Configurações'};
 function go(s){
   if(s==='ajustes'&&!PdvCaixa.admin()){toast('Somente o Master pode alterar configurações.');return;}
   if((s==='balcao'||s==='pagamento')&&!PdvCaixa.podeVender())return;
   if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
+  document.body.classList.toggle('pdv-fechamento',s==='fechamento');
   screen=s;$$('.screen').forEach(x=>x.hidden=x.id!=='s-'+s);
   $('#title').textContent=TITLES[s];$('#toolbar').hidden=s==='inicio';
   $('#tbCli').hidden=$('#tbVend').hidden=!(s==='balcao'||s==='pagamento');
@@ -628,7 +634,7 @@ function go(s){
   if(s==='pagamento'){setVal(0);renderPay();setTimeout(()=>$('#valor').focus(),0)}
   if(s==='vendas')renderVendas();if(s==='caixa'){renderCaixa();PdvCaixa.render();}if(s==='ajustes')renderAjustes();
 }
-function voltar(){if($('.modal:not([hidden])'))return;({balcao:'inicio',pagamento:'balcao',vendas:'inicio',caixa:'inicio',ajustes:'inicio'})[screen]&&go({balcao:'inicio',pagamento:'balcao',vendas:'inicio',caixa:'inicio',ajustes:'inicio'}[screen])}
+function voltar(){if($('.modal:not([hidden])'))return;({balcao:'inicio',pagamento:'balcao',vendas:'inicio',caixa:'inicio',fechamento:'caixa',ajustes:'inicio'})[screen]&&go({balcao:'inicio',pagamento:'balcao',vendas:'inicio',caixa:'inicio',fechamento:'caixa',ajustes:'inicio'}[screen])}
 $('#btnBack').onclick=voltar;
 $$('[data-act]').forEach(b=>b.onclick=()=>homeAct(b.dataset.act));
 function homeAct(a){
