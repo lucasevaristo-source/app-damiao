@@ -360,6 +360,17 @@ const iconeProduto=p=>ICAT[p.categoria]||ICAT['Outros'];
 let FOTOS=null;
 async function carregarFotos(){if(FOTOS)return FOTOS;try{FOTOS=await fetch('img/produtos/fotos.json').then(r=>r.ok?r.json():{})}catch(e){FOTOS={}}return FOTOS}
 const fotoProduto=p=>p.imagem||(FOTOS&&FOTOS[p.codigo])||'';
+
+/* ---- frete por cliente ---- */
+const freteCalc=(f,sub)=>!f||!(+f.valor>0)?0:(+f.gratisAcima>0&&sub>=+f.gratisAcima?0:+f.valor);
+function blocoFrete(f,sub){
+  const fr=freteCalc(f,sub);if(!f||!(+f.valor>0))return `<div class="tot"><span>Total</span><span class="num">${R$(sub)}</span></div>`;
+  const falta=+f.gratisAcima>0?+f.gratisAcima-sub:0;
+  return `<div style="display:flex;justify-content:space-between;font-size:14px"><span>Subtotal</span><span class="num">${R$(sub)}</span></div>
+   <div style="display:flex;justify-content:space-between;font-size:14px"><span>Frete</span><span class="num">${fr?R$(fr):'<b style="color:var(--green)">Grátis</b>'}</span></div>
+   ${fr&&falta>0?`<div class="msg info" style="margin:0">Faltam <b>${R$(falta)}</b> para ter a <b>entrega grátis</b>.</div>`:''}${!fr&&+f.gratisAcima>0?'<div class="msg ok" style="margin:0">Você ganhou <b>entrega grátis</b>!</div>':''}
+   <div class="tot"><span>Total</span><span class="num">${R$(sub+fr)}</span></div>`;
+}
 function prepararCatalogo(cat){
   cat.produtos.forEach(p=>{p.nomeBling=p.nome;p.nome=nomeLoja(p.nome);if(!p.categoria)p.categoria=categoriaAuto(p.nomeBling);p.imagem=fotoProduto(p)});
   const usadas=[...new Set(cat.produtos.map(p=>p.categoria))];
@@ -476,7 +487,7 @@ async function abrirCarrinho(){
       <div style="display:flex;gap:10px;align-items:center"><span class="qty" style="height:34px"><button data-cm>−</button><input class="num" value="${i.qtd}" data-cq><button data-cp>+</button></span><button class="rm" data-cr>Remover</button></div></div>`).join('')||'<div class="empty"><b>Carrinho vazio</b>Adicione produtos da loja.</div>'}</div>
     <footer>${linhas.length?`<div class="field"><label for="cfp">Forma de pagamento</label><select id="cfp"><option value="">Combinar na entrega</option>${(FORMAS||[]).map(f=>`<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join('')}</select></div>
       <div class="field"><label for="cobs">Observação</label><input id="cobs" placeholder="Ex.: entregar pela manhã"></div>
-      <div class="tot"><span>Total</span><span class="num">${R$(tot)}</span></div>
+      <div id="cfrete" style="display:flex;flex-direction:column;gap:6px">${blocoFrete(CAT.frete,tot)}</div>
       <button class="btn g" data-enviar style="height:48px">Enviar pedido</button>`:'<button class="btn o" data-x>Continuar comprando</button>'}</footer>`;
   };
   render();
@@ -490,7 +501,7 @@ async function abrirCarrinho(){
     else if(e.target.closest('[data-enviar]')){
       try{const r=await api('enviarPedido',{itens:CART,formaPagamentoId:d.querySelector('#cfp').value,obs:d.querySelector('#cobs').value});
         CART=[];salvarCarrinho();d.remove();
-        modal(`<header><h3>Pedido enviado!</h3><button data-fechar>×</button></header><div class="body"><div class="msg ok" style="font-size:16px">Pedido <b>#${r.numero}</b> recebido · total ${R$(r.total)}.</div><p style="margin:0">Você acompanha a situação em <b>Meus pedidos</b>. Obrigado pela preferência!</p></div><footer><button class="btn" data-fechar>Continuar</button></footer>`);
+        modal(`<header><h3>Pedido enviado!</h3><button data-fechar>×</button></header><div class="body"><div class="msg ok" style="font-size:16px">Pedido <b>#${r.numero}</b> recebido · total ${R$(r.total)}${r.frete?' (frete '+R$(r.frete)+')':''}.</div><p style="margin:0">Você acompanha a situação em <b>Meus pedidos</b>. Obrigado pela preferência!</p></div><footer><button class="btn" data-fechar>Continuar</button></footer>`);
       }catch(x){falha(x)}return}
     else return;
     salvarCarrinho();render();
@@ -556,7 +567,7 @@ function detalhePedido(p,equipe,onChange){
    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">${pillStatus(p.status)}<span style="color:var(--muted);font-size:14px">${dth(p.data)}${p.cliente?' · '+esc(p.cliente):''}${p.vendedor?' · Vendedor: '+esc(p.vendedor):''}</span>${p.blingNumero?`<span class="pill p-info">Bling nº ${esc(p.blingNumero)}</span>`:''}</div>
    ${p.erroBling?`<div class="msg bad">Não foi para o Bling: ${esc(p.erroBling)}</div>`:''}
    <div class="scroll"><table class="t"><thead><tr><th>Produto</th><th class="r">Qtd.</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>${p.itens.map(i=>`<tr><td>${esc(i.nome)}<div style="font-size:12px;color:var(--muted)">${esc(i.codigo)}</div></td><td class="r num">${i.qtd}</td><td class="r num">${R$(i.preco)}</td><td class="r num">${R$(i.total)}</td></tr>`).join('')}</tbody></table></div>
-   <div class="tot"><span>Total</span><span class="num">${R$(p.total)}</span></div>
+   ${p.frete?`<div style="display:flex;justify-content:space-between;font-size:14px"><span>Frete</span><span class="num">${R$(p.frete)}</span></div>`:''}<div class="tot"><span>Total</span><span class="num">${R$(p.total)}</span></div>
    ${p.obs?`<div class="msg info">Obs.: ${esc(p.obs)}</div>`:''}
    ${equipe?`<div class="grid2" style="align-items:end"><div class="field"><label for="ps">Situação</label><select id="ps">${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue'].concat(OPER()?[]:['Cancelado']).map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}</select></div><button class="btn" id="psv">Salvar situação</button></div>
    ${!p.blingNumero?'<button class="btn y" id="pbl">Enviar ao Bling agora</button>':''}`:''}
@@ -577,7 +588,7 @@ function imprimirPedido(p){
   const itens=p.itens||[];
   imprimir(`<div class="pr-rom"><h1>Pedido nº ${esc(p.numero)}</h1><div>${esc(p.cliente||'')}${p.cidade?' · '+esc(p.cidade):''}</div><div>Data: ${dth(p.data)}${p.vendedor?' · Vendedor: '+esc(p.vendedor):''}${p.blingNumero?' · Bling nº '+esc(p.blingNumero):''} · Situação: ${esc(p.status)}</div>
    <table><thead><tr><th style="width:10mm">✓</th><th>Produto</th><th style="width:24mm">Código</th><th style="width:20mm">Qtd.</th><th style="width:24mm">Preço</th><th style="width:26mm">Total</th></tr></thead><tbody>${itens.map(i=>`<tr><td></td><td>${esc(i.nome)}</td><td>${esc(i.codigo||'')}</td><td>${esc(i.qtd)} ${esc(i.unidade||'')}</td><td>${R$(i.preco)}</td><td>${R$(i.total)}</td></tr>`).join('')}</tbody>
-   <tfoot><tr><td colspan="5" style="text-align:right"><b>Total do pedido</b></td><td><b>${R$(p.total)}</b></td></tr></tfoot></table>
+   <tfoot>${p.frete?`<tr><td colspan="5" style="text-align:right">Frete</td><td>${R$(p.frete)}</td></tr>`:''}<tr><td colspan="5" style="text-align:right"><b>Total do pedido</b></td><td><b>${R$(p.total)}</b></td></tr></tfoot></table>
    ${p.obs?`<p><b>Obs.:</b> ${esc(p.obs)}</p>`:''}
    <p style="margin-top:12mm">Separado por: ______________________________ &nbsp; Conferido por: ______________________________</p></div>`,'size:A4;margin:0');
 }
@@ -599,7 +610,7 @@ async function editarPedido(p,onChange){
     (p.itens||[]).forEach(i=>{if(!lista.find(x=>String(x.id)===String(i.produtoId)))lista.unshift({id:i.produtoId,nome:i.nome,codigo:i.codigo,unidade:i.unidade,preco:i.preco})});
     m.querySelector('#ept').innerHTML=`<thead><tr><th>Produto</th><th class="r">Preço</th><th class="r" style="width:110px">Qtd.</th></tr></thead><tbody>${lista.map(x=>`<tr><td>${esc(x.nome)}<div style="font-size:12px;color:var(--muted)">${esc(x.codigo||'')}</div></td><td class="r num">${R$(preco(x.id))}</td><td class="r"><input class="inp num" data-q="${esc(x.id)}" value="${qt[x.id]!==undefined?qt[x.id]:''}" inputmode="decimal" style="height:36px;width:90px;text-align:right" aria-label="Quantidade"></td></tr>`).join('')}</tbody>`;
     tot()};
-  const tot=()=>{m.querySelector('#eptot').textContent=R$(Object.entries(qt).reduce((s,[id,q])=>s+(+q||0)*preco(id),0))};
+  const tot=()=>{const sb=Object.entries(qt).reduce((s,[id,q])=>s+(+q||0)*preco(id),0),fr=freteCalc(cat.frete,sb);m.querySelector('#eptot').textContent=R$(sb+fr)+(fr?' (frete '+R$(fr)+')':'')};
   m.querySelector('#epb').oninput=desenha;
   m.querySelector('#ept').oninput=e=>{const id=e.target.dataset.q;if(!id)return;const v=String(e.target.value).replace(',','.');if(v==='')delete qt[id];else qt[id]=+v;tot()};
   m.querySelector('#epsv').onclick=async()=>{const itens=Object.entries(qt).filter(([id,q])=>+q>0).map(([produtoId,qtd])=>({produtoId,qtd:+qtd}));
@@ -727,10 +738,10 @@ async function vNovo(){
     $('#ninfo').textContent='Tabela: '+c.tabelaNome+(c.vendedorNome?' · Vendedor: '+c.vendedorNome:'');
     try{const cat=await api('catalogoLoja',{clienteId:c.id});const itens={};
       $('#narea').innerHTML=`<div class="toolbar"><input class="inp" id="nb" placeholder="Buscar produto" aria-label="Buscar produto"></div><div class="scroll" style="max-height:52vh;overflow:auto"><table class="t" id="ntab"></table></div>
-       <div class="card" style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;align-items:end"><div class="field"><label for="nobs">Observação</label><input id="nobs"></div><div class="tot" style="align-self:center"><span>Total</span><span class="num" id="ntot">R$ 0,00</span></div><button class="btn g" id="nenv">Enviar pedido</button></div>`;
-      const tot=()=>{$('#ntot').textContent=R$(Object.entries(itens).reduce((s,[id,q])=>s+q*(cat.produtos.find(p=>p.id===id)||{preco:0}).preco,0))};
+       <div class="card" style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;align-items:end"><div class="field"><label for="nobs">Observação</label><input id="nobs"></div><div id="ntot" style="display:flex;flex-direction:column;gap:6px;align-self:center"></div><button class="btn g" id="nenv">Enviar pedido</button></div>`;
+      const tot=()=>{$('#ntot').innerHTML=blocoFrete(cat.frete,Object.entries(itens).reduce((s,[id,q])=>s+q*(cat.produtos.find(p=>p.id===id)||{preco:0}).preco,0))};
       const rt=()=>{const ws=norm($('#nb').value).split(/\s+/).filter(Boolean);$('#ntab').innerHTML=`<thead><tr><th>Produto</th><th class="r">Preço</th><th class="r" style="width:120px">Qtd.</th></tr></thead><tbody>${cat.produtos.filter(p=>ws.every(w=>norm(p.nome+' '+p.codigo).includes(w))).map(p=>`<tr><td>${esc(p.nome)}<div style="font-size:12px;color:var(--muted)">${esc(p.codigo)}${p.precoTabela?' · preço da tabela':''}</div></td><td class="r num">${R$(p.preco)}</td><td class="r"><input class="inp num" style="height:36px;width:90px;text-align:right" data-q="${esc(p.id)}" value="${itens[p.id]||''}" inputmode="decimal"></td></tr>`).join('')}</tbody>`};
-      rt();$('#nb').oninput=rt;$('#ntab').oninput=e=>{const id=e.target.dataset.q;if(!id)return;const q=parseFloat(String(e.target.value).replace(',','.'))||0;if(q>0)itens[id]=q;else delete itens[id];tot()};
+      rt();tot();$('#nb').oninput=rt;$('#ntab').oninput=e=>{const id=e.target.dataset.q;if(!id)return;const q=parseFloat(String(e.target.value).replace(',','.'))||0;if(q>0)itens[id]=q;else delete itens[id];tot()};
       $('#nenv').onclick=async()=>{try{const r=await api('enviarPedido',{clienteId:c.id,itens:Object.entries(itens).map(([produtoId,qtd])=>({produtoId,qtd})),obs:$('#nobs').value});toast('Pedido #'+r.numero+' criado · '+R$(r.total));VIEW='pedidos';iniciarPainel()}catch(x){falha(x)}};
     }catch(e){falha(e)}};
 }
@@ -784,7 +795,7 @@ function editarCliente(c){
     ${gv?`<div class="field"><label for="e13">Vendedor</label><select id="e13"><option value="">— Sem vendedor —</option>${vend.map(v=>`<option value="${v.id}" ${v.id===c.vendedorId?'selected':''}>${esc(v.nome)}</option>`).join('')}</select></div>
     <div class="field"><label for="e14">Tabela de preço</label><select id="e14">${(TABS||[]).map(t=>`<option value="${t.id}" ${t.id===c.tabelaId?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
     ${g?`<div class="field"><label for="e15">Situação</label><select id="e15">${[['aprovado','Aprovado'],['pendente','Aguardando aprovação'],['bloqueado','Bloqueado']].map(([k,l])=>`<option value="${k}" ${k===c.status?'selected':''}>${l}</option>`).join('')}</select></div>`:''}`:''}
-   </div>${g?`<div class="field"><label>Formas de pagamento liberadas na loja</label><div id="efp" style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--muted)">Carregando…</div><div style="font-size:12.5px;color:var(--muted)">Só o Master e o Administrador liberam. Sem nenhuma marcada, o cliente vê as formas padrão de Configurações.</div></div>`:''}
+   </div>${g?`<div class="grid2"><div class="field"><label for="e18">Frete (R$)</label><input id="e18" inputmode="decimal" placeholder="Ex.: 10,00 (vazio = sem frete)" value="${esc(c.freteValor||'')}"></div><div class="field"><label for="e19">Entrega grátis a partir de (R$)</label><input id="e19" inputmode="decimal" placeholder="Ex.: 150,00 (vazio = frete sempre)" value="${esc(c.freteGratisAcima||'')}"></div></div>`:''}${g?`<div class="field"><label>Formas de pagamento liberadas na loja</label><div id="efp" style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--muted)">Carregando…</div><div style="font-size:12.5px;color:var(--muted)">Só o Master e o Administrador liberam. Sem nenhuma marcada, o cliente vê as formas padrão de Configurações.</div></div>`:''}
    ${g&&!n&&c.temAcesso?`<div class="field"><label for="e17">Senha de acesso ao App</label><div style="display:flex;gap:8px"><input id="e17" type="text" autocomplete="off" placeholder="Nova senha (mínimo 6 caracteres)" style="flex:1"><button type="button" class="btn o sm" id="esen">Alterar senha</button></div><div style="font-size:12.5px;color:var(--muted)">Só o Master e o Administrador alteram. Passe a nova senha ao cliente.</div></div>`:''}
    <div class="field"><label for="e16">Observações internas</label><textarea id="e16">${esc(c.obs||'')}</textarea></div>
    ${!n?`<div style="font-size:13px;color:var(--muted)">${c.blingId?'Ligado ao Bling (contato '+esc(c.blingId)+')':'Ainda não está no Bling: é criado no primeiro pedido.'} · ${c.temAcesso?(c.acessoAtivo?'Tem acesso à loja':'Acesso à loja bloqueado'):'Sem acesso à loja'}</div>`:''}
@@ -792,7 +803,7 @@ function editarCliente(c){
   const v=id=>{const e=m.querySelector('#'+id);return e?e.value:undefined};
   const efp=m.querySelector('#efp');
   if(efp)api('formasPagamento',{},true).then(fs=>{const sel=String(c.formasPagamento||'').split(',').filter(String);efp.style.color='';efp.innerHTML=fs.map(x=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-cfp value="${esc(x.id)}" ${sel.includes(String(x.id))?'checked':''}>${esc(x.nome)}</label>`).join('')||'Nenhuma forma de pagamento no Bling.'}).catch(()=>{efp.textContent='Não foi possível carregar as formas de pagamento.'});
-  const dados=()=>({id:c.id,nome:v('e1'),fantasia:v('e2'),tipo:v('e3'),documento:v('e4'),email:v('e5'),telefone:v('e6'),cep:v('e7'),endereco:v('e8'),numero:v('e9'),bairro:v('e10'),cidade:v('e11'),uf:v('e12'),vendedorId:v('e13'),tabelaId:v('e14'),status:v('e15'),obs:v('e16'),formasPagamento:efp&&efp.querySelector('[data-cfp]')?[...efp.querySelectorAll('[data-cfp]:checked')].map(e=>e.value).join(','):undefined});
+  const dados=()=>({id:c.id,nome:v('e1'),fantasia:v('e2'),tipo:v('e3'),documento:v('e4'),email:v('e5'),telefone:v('e6'),cep:v('e7'),endereco:v('e8'),numero:v('e9'),bairro:v('e10'),cidade:v('e11'),uf:v('e12'),vendedorId:v('e13'),tabelaId:v('e14'),status:v('e15'),obs:v('e16'),freteValor:v('e18'),freteGratisAcima:v('e19'),formasPagamento:efp&&efp.querySelector('[data-cfp]')?[...efp.querySelectorAll('[data-cfp]:checked')].map(e=>e.value).join(','):undefined});
   const sen=m.querySelector('#esen');if(sen)sen.onclick=async()=>{const s=m.querySelector('#e17').value.trim();if(s.length<6){toast('A senha precisa ter pelo menos 6 caracteres.');return}try{toast(await api('redefinirSenhaCliente',{clienteId:c.id,senha:s}));m.querySelector('#e17').value=''}catch(x){falha(x)}};
   m.querySelector('#esv').onclick=async()=>{try{await api('salvarCliente',dados());toast('Cliente salvo');m.fechar();vClientes()}catch(x){falha(x)}};
   const a=m.querySelector('#eapr');if(a)a.onclick=async()=>{try{await api('salvarCliente',dados());await api('aprovarCliente',{id:c.id,vendedorId:v('e13'),tabelaId:v('e14')});toast('Cliente aprovado e avisado por e-mail');m.fechar();vClientes()}catch(x){falha(x)}};
