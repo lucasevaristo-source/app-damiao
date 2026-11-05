@@ -939,7 +939,7 @@ const Sync={
     const base=CFG.url.trim();let r;
     if(body)r=await fetch(base,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({acao,chave:CFG.token,pdvToken:PdvCaixa.token,...body}),redirect:'follow'});
     else r=await fetch(base+(base.includes('?')?'&':'?')+'acao='+acao+'&chave='+encodeURIComponent(CFG.token),{redirect:'follow'});
-    const txt=await r.text();let j;try{j=JSON.parse(txt)}catch(e){throw new Error('A ponte do Google não respondeu direito ('+r.status+'). Confira o endereço.')}
+    const txt=await r.text();let j;try{j=JSON.parse(txt)}catch(e){if(base!==PdvCaixa.ponte){CFG.url=PdvCaixa.ponte;try{saveCfg()}catch(_){}return this.req(acao,body)}throw new Error('A ponte do Google não respondeu direito ('+r.status+'). Tente de novo em 1 minuto.')}
     if(!r.ok||j.ok===false)throw new Error(j.erro||('Erro '+r.status));return j;
   },
   async catalogo(){

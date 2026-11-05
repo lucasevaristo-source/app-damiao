@@ -7,8 +7,16 @@ const PdvCaixa=(()=>{
   const lock=fn=>navigator.locks?navigator.locks.request('pdv-damiao-operacao',fn):Promise.reject(Error('Atualize o Chrome para usar o controle de caixa.'));
   async function api(acao,dados={}){
     if(!navigator.onLine)throw Error('Conecte à internet para esta operação.');
-    const r=await fetch(CFG.url||PONTE,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({app:1,acao,dados,token}),redirect:'follow'});
-    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.erro||'Não foi possível confirmar a operação no Google.');expira=Date.now()+5*60*60*1000;return j.r;
+    // tenta o endereço salvo no caixa; se ele responder uma página em vez de dados, usa o endereço oficial da ponte e corrige a configuração
+    const urls=[...new Set([(CFG.url||'').trim(),PONTE].filter(Boolean))];let j=null,ultimo='';
+    for(const u of urls){
+      let txt='';try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({app:1,acao,dados,token}),redirect:'follow'});txt=await r.text();}catch(e){ultimo='Sem resposta do Google. Confira a internet e tente de novo.';continue;}
+      try{j=JSON.parse(txt);}catch(e){ultimo='O Google respondeu uma página em vez dos dados. Aguarde 1 minuto e tente de novo.';continue;}
+      if(u===PONTE&&CFG.url!==PONTE){CFG.url=PONTE;try{saveCfg();}catch(e){}}
+      break;
+    }
+    if(!j)throw Error(ultimo);
+    if(!j.ok)throw Error(j.erro||'Não foi possível confirmar a operação no Google.');expira=Date.now()+5*60*60*1000;return j.r;
   }
   function barra(){const b=document.querySelector('#pdvOperadorBar');if(!b||!usuario)return;const c=estado.aberto;b.querySelector('span').textContent=usuario.nome+' · '+CFG.caixa+' · '+(c?'Caixa aberto · saldo confirmado '+R$(c.esperado):'Caixa fechado');b.querySelector('#pdvUsuarios').hidden=!admin();document.querySelectorAll('[data-act="ajustes"]').forEach(x=>x.hidden=!admin());}
   function podeVender(){if(!usuario||Date.now()>expira){bloquear('Entre novamente para continuar.');return false;}if(!estado.aberto||estado.aberto.caixa!==CFG.caixa){toast('Abra o caixa antes de vender.');go('caixa');return false;}return true;}
@@ -103,5 +111,5 @@ const PdvCaixa=(()=>{
     printHTML(relatorioHTML(c));
   }
   async function imprimirAtual(){try{await atualizar();const c=estado.aberto||estado.ultimo;if(!c)throw Error('Nenhum caixa registrado.');imprimir(c);}catch(e){toast(e.message);}}
-  return {alterarVenda:d=>api('pdvAlterarVenda',d),iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
+  return {ponte:PONTE,alterarVenda:d=>api('pdvAlterarVenda',d),iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
 })();
