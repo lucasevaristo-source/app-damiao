@@ -558,22 +558,94 @@ function detalhePedido(p,equipe,onChange){
    <div class="scroll"><table class="t"><thead><tr><th>Produto</th><th class="r">Qtd.</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>${p.itens.map(i=>`<tr><td>${esc(i.nome)}<div style="font-size:12px;color:var(--muted)">${esc(i.codigo)}</div></td><td class="r num">${i.qtd}</td><td class="r num">${R$(i.preco)}</td><td class="r num">${R$(i.total)}</td></tr>`).join('')}</tbody></table></div>
    <div class="tot"><span>Total</span><span class="num">${R$(p.total)}</span></div>
    ${p.obs?`<div class="msg info">Obs.: ${esc(p.obs)}</div>`:''}
-   ${equipe?`<div class="grid2" style="align-items:end"><div class="field"><label for="ps">Situação</label><select id="ps">${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue','Cancelado'].map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}</select></div><button class="btn" id="psv">Salvar situação</button></div>
+   ${equipe?`<div class="grid2" style="align-items:end"><div class="field"><label for="ps">Situação</label><select id="ps">${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue'].concat(OPER()?[]:['Cancelado']).map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}</select></div><button class="btn" id="psv">Salvar situação</button></div>
    ${!p.blingNumero?'<button class="btn y" id="pbl">Enviar ao Bling agora</button>':''}`:''}
+   ${equipe?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="pimp">Imprimir pedido</button>${GOP()&&PED_EDITAVEL.includes(p.status)?'<button class="btn o" id="ped">Editar pedido</button>':''}</div>`:''}
   </div>`,{wide:true});
   if(equipe){
+    m.querySelector('#pimp').onclick=()=>imprimirPedido(p);
+    const pe=m.querySelector('#ped');if(pe)pe.onclick=()=>{m.fechar();editarPedido(p,onChange)};
     m.querySelector('#psv').onclick=async()=>{try{await api('mudarStatusPedido',{id:p.id,status:m.querySelector('#ps').value});toast('Situação atualizada');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
     const b=m.querySelector('#pbl');if(b)b.onclick=async()=>{try{await api('enviarPedidoBling',{id:p.id});toast('Pedido enviado ao Bling');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
   }
 }
 
+
+/* ---- pedido: imprimir e editar ---- */
+const PED_EDITAVEL=['Recebido','Em separação','Enviado ao Bling'];
+function imprimirPedido(p){
+  const itens=p.itens||[];
+  imprimir(`<div class="pr-rom"><h1>Pedido nº ${esc(p.numero)}</h1><div>${esc(p.cliente||'')}${p.cidade?' · '+esc(p.cidade):''}</div><div>Data: ${dth(p.data)}${p.vendedor?' · Vendedor: '+esc(p.vendedor):''}${p.blingNumero?' · Bling nº '+esc(p.blingNumero):''} · Situação: ${esc(p.status)}</div>
+   <table><thead><tr><th style="width:10mm">✓</th><th>Produto</th><th style="width:24mm">Código</th><th style="width:20mm">Qtd.</th><th style="width:24mm">Preço</th><th style="width:26mm">Total</th></tr></thead><tbody>${itens.map(i=>`<tr><td></td><td>${esc(i.nome)}</td><td>${esc(i.codigo||'')}</td><td>${esc(i.qtd)} ${esc(i.unidade||'')}</td><td>${R$(i.preco)}</td><td>${R$(i.total)}</td></tr>`).join('')}</tbody>
+   <tfoot><tr><td colspan="5" style="text-align:right"><b>Total do pedido</b></td><td><b>${R$(p.total)}</b></td></tr></tfoot></table>
+   ${p.obs?`<p><b>Obs.:</b> ${esc(p.obs)}</p>`:''}
+   <p style="margin-top:12mm">Separado por: ______________________________ &nbsp; Conferido por: ______________________________</p></div>`,'size:A4;margin:0');
+}
+async function editarPedido(p,onChange){
+  let cat;try{cat=await api('catalogoLoja',{clienteId:p.clienteId})}catch(e){falha(e);return}
+  let formas=[];try{formas=FORMAS||await api('formasPagamento',{},true)}catch(e){}
+  const qt={};(p.itens||[]).forEach(i=>qt[i.produtoId]=i.qtd);
+  const preco=id=>{const x=cat.produtos.find(y=>String(y.id)===String(id));return x?x.preco:((p.itens||[]).find(i=>String(i.produtoId)===String(id))||{preco:0}).preco};
+  const m=modal(`<header><h3>Editar pedido #${esc(p.numero)} · ${esc(p.cliente||'')}</h3><button data-fechar>×</button></header><div class="body">
+   <div class="msg info">Mude as quantidades (0 tira o item) ou adicione produtos. ${p.blingNumero?'O pedido no Bling é atualizado junto.':''}</div>
+   <div class="toolbar"><input class="inp" id="epb" placeholder="Buscar produto para adicionar" aria-label="Buscar produto"></div>
+   <div class="scroll" style="max-height:46vh;overflow:auto"><table class="t" id="ept"></table></div>
+   <div class="grid2"><div class="field"><label for="epf">Forma de pagamento</label><select id="epf"><option value="">Combinar na entrega</option>${(formas||[]).map(f=>`<option value="${esc(f.id)}" ${String(f.id)===String(p.formaPagamentoId)?'selected':''}>${esc(f.nome)}</option>`).join('')}</select></div>
+   <div class="field"><label for="epo">Observação</label><input id="epo" value="${esc(p.obs||'')}"></div></div>
+   <div class="tot"><span>Total</span><span class="num" id="eptot"></span></div>
+  </div><footer><button class="btn o" data-fechar>Cancelar</button><button class="btn g" id="epsv">Salvar alterações</button></footer>`,{wide:true});
+  const desenha=()=>{const q=norm(m.querySelector('#epb').value);
+    const lista=cat.produtos.filter(x=>qt[x.id]!==undefined||(q&&norm(x.nome+' '+x.codigo).includes(q))).slice(0,80);
+    (p.itens||[]).forEach(i=>{if(!lista.find(x=>String(x.id)===String(i.produtoId)))lista.unshift({id:i.produtoId,nome:i.nome,codigo:i.codigo,unidade:i.unidade,preco:i.preco})});
+    m.querySelector('#ept').innerHTML=`<thead><tr><th>Produto</th><th class="r">Preço</th><th class="r" style="width:110px">Qtd.</th></tr></thead><tbody>${lista.map(x=>`<tr><td>${esc(x.nome)}<div style="font-size:12px;color:var(--muted)">${esc(x.codigo||'')}</div></td><td class="r num">${R$(preco(x.id))}</td><td class="r"><input class="inp num" data-q="${esc(x.id)}" value="${qt[x.id]!==undefined?qt[x.id]:''}" inputmode="decimal" style="height:36px;width:90px;text-align:right" aria-label="Quantidade"></td></tr>`).join('')}</tbody>`;
+    tot()};
+  const tot=()=>{m.querySelector('#eptot').textContent=R$(Object.entries(qt).reduce((s,[id,q])=>s+(+q||0)*preco(id),0))};
+  m.querySelector('#epb').oninput=desenha;
+  m.querySelector('#ept').oninput=e=>{const id=e.target.dataset.q;if(!id)return;const v=String(e.target.value).replace(',','.');if(v==='')delete qt[id];else qt[id]=+v;tot()};
+  m.querySelector('#epsv').onclick=async()=>{const itens=Object.entries(qt).filter(([id,q])=>+q>0).map(([produtoId,qtd])=>({produtoId,qtd:+qtd}));
+    if(!itens.length){toast('O pedido precisa de pelo menos um item.');return}
+    try{toast('Salvando…');await api('editarPedido',{id:p.id,itens,obs:m.querySelector('#epo').value,formaPagamentoId:m.querySelector('#epf').value});toast('Pedido atualizado');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
+  desenha();
+}
+
+/* ---- estoque (Operacional, Administrador e Master) ---- */
+async function vEstoque(){
+  M().innerHTML=`<div class="ph"><div><h1>Estoque</h1><p>Saldo do Bling. Lance aqui as entradas de mercadoria conforme chegam; saídas e ajustes só no Bling.</p></div>
+   <div class="toolbar"><button class="btn o sm" id="eshist">Últimas entradas</button><button class="btn o sm" id="esimp">Imprimir conferência</button><button class="btn sm" id="esref">Atualizar</button></div></div>
+   <div class="toolbar"><input class="inp" id="esb" placeholder="Buscar produto ou código" aria-label="Buscar"></div>
+   <div class="scroll" id="est"><div class="empty"><b>Buscando o estoque no Bling…</b>Pode levar alguns segundos.</div></div>`;
+  let L=[];
+  const render=()=>{const q=norm($('#esb').value);const l=L.filter(x=>!q||norm(x.nome+' '+x.codigo).includes(q));
+    $('#est').innerHTML=l.length?`<table class="t"><thead><tr><th>Produto</th><th>Código</th><th>Un.</th><th class="r">Saldo</th><th></th></tr></thead><tbody>${l.map(x=>`<tr><td><b>${esc(x.nome)}</b></td><td>${esc(x.codigo||'')}</td><td>${esc(x.unidade||'')}</td><td class="r num"><b>${x.saldo==null?'—':String(x.saldo).replace('.',',')}</b></td><td class="r"><button class="btn sm g" data-ent="${esc(x.id)}">+ Entrada</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum produto encontrado</b></div>'};
+  const carregar=async()=>{try{L=await api('estoqueSaldos',{},true);render()}catch(e){$('#est').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}};
+  $('#esb').oninput=render;$('#esref').onclick=()=>{$('#est').innerHTML='<div class="empty"><b>Atualizando…</b></div>';carregar()};
+  $('#est').onclick=e=>{const b=e.target.closest('[data-ent]');if(!b)return;const x=L.find(y=>String(y.id)===b.dataset.ent);
+    const m=modal(`<header><h3>Entrada de estoque</h3><button data-fechar>×</button></header><div class="body">
+      <div><b>${esc(x.nome)}</b> · saldo atual ${x.saldo==null?'—':String(x.saldo).replace('.',',')} ${esc(x.unidade||'')}</div>
+      <div class="grid2"><div class="field"><label for="enq">Quantidade que chegou</label><input id="enq" inputmode="decimal" placeholder="Ex.: 20"></div>
+      <div class="field"><label for="eno">Observação (nota, fornecedor)</label><input id="eno" placeholder="Ex.: NF 1234 · Fornecedor"></div></div>
+      <div style="font-size:13px;color:var(--muted)">Só entradas. Para retirar ou corrigir saldo, fale com o Master ou o Administrador.</div>
+     </div><footer><button class="btn o" data-fechar>Cancelar</button><button class="btn g" id="ensv">Lançar entrada</button></footer>`);
+    m.querySelector('#ensv').onclick=async()=>{const q=+String(m.querySelector('#enq').value).replace(',','.');if(!(q>0)){toast('Informe uma quantidade maior que zero.');return}
+      try{const r=await api('estoqueEntrada',{produtoId:x.id,quantidade:q,obs:m.querySelector('#eno').value});x.saldo=r.saldo;toast('Entrada lançada no Bling: +'+String(q).replace('.',',')+' '+(x.unidade||''));m.fechar();render()}catch(err){falha(err)}}};
+  $('#esimp').onclick=()=>{if(!L.length){toast('Aguarde o estoque carregar.');return}
+    imprimir(`<div class="pr-rom"><h1>Conferência de estoque</h1><div>Damião Pães · ${new Date().toLocaleString('pt-BR')} · Conferido por: ${esc(ME.nome)}</div>
+     <table><thead><tr><th>Produto</th><th style="width:24mm">Código</th><th style="width:12mm">Un.</th><th style="width:22mm">Sistema</th><th style="width:24mm">Contado</th><th style="width:24mm">Diferença</th></tr></thead>
+     <tbody>${L.map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.codigo||'')}</td><td>${esc(x.unidade||'')}</td><td>${x.saldo==null?'':String(x.saldo).replace('.',',')}</td><td></td><td></td></tr>`).join('')}</tbody></table>
+     <p style="margin-top:10mm">Assinatura: ______________________________ &nbsp; Data: ___/___/______</p></div>`,'size:A4;margin:0')};
+  $('#eshist').onclick=async()=>{try{const h=await api('estoqueEntradas',{});modal(`<header><h3>Últimas entradas</h3><button data-fechar>×</button></header><div class="body"><div class="scroll"><table class="t"><thead><tr><th>Data</th><th>Produto</th><th class="r">Qtd.</th><th>Por</th><th>Obs.</th><th>Bling</th></tr></thead><tbody>${h.map(e=>`<tr><td>${dth(e.data)}</td><td>${esc(e.produto)}</td><td class="r num">${String(e.quantidade).replace('.',',')}</td><td>${esc(e.usuario)}</td><td>${esc(e.obs||'')}</td><td>${e.erro?'<span class="pill p-bad">Erro</span>':'<span class="pill p-ok">Lançado</span>'}</td></tr>`).join('')||'<tr><td colspan="6">Nenhuma entrada ainda.</td></tr>'}</tbody></table></div></div>`,{wide:true})}catch(e){falha(e)}};
+  carregar();
+}
+
 /* ===================== PAINEL ===================== */
 const GESTAO=()=>ME&&(ME.papel==='master'||ME.papel==='admin');
+const OPER=()=>ME&&ME.papel==='operacional';
+const GOP=()=>GESTAO()||OPER();
 let VIEW='dashboard';
 function iniciarPainel(){
-  if(ME.papel==='caixa'){location.href='/pdv/';return}const MOT=ME.papel==='motorista';if(MOT)VIEW='rotas';
-  const itens=MOT?[['rotas','Minhas rotas',ICON.rota]]:[['dashboard','Dashboard',ICON.dash],['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes',ME.papel==='vendedor'?'Meus clientes':'Clientes',ICON.cli],['produtos','Produtos',ICON.prod]]
-    .concat(GESTAO()?[['rotas','Rotas e entregas',ICON.rota],['tabelas','Tabelas de preço',ICON.tab],['usuarios','Usuários',ICON.usr],['config','Configurações',ICON.cfg]]:[]);
+  if(ME.papel==='caixa'){location.href='/pdv/';return}const MOT=ME.papel==='motorista';if(MOT)VIEW='rotas';const OPR=OPER();if(OPR&&VIEW==='dashboard')VIEW='pedidos';
+  const itens=MOT?[['rotas','Minhas rotas',ICON.rota]]:OPR?[['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes','Clientes',ICON.cli],['produtos','Produtos',ICON.prod],['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota]]:[['dashboard','Dashboard',ICON.dash],['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes',ME.papel==='vendedor'?'Meus clientes':'Clientes',ICON.cli],['produtos','Produtos',ICON.prod]]
+    .concat(GESTAO()?[['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota],['tabelas','Tabelas de preço',ICON.tab],['usuarios','Usuários',ICON.usr],['config','Configurações',ICON.cfg]]:[]);
   $('#root').innerHTML=`<div class="mtop"><button id="mmenu" aria-label="Menu">${ICON.menu}</button><img src="${LOGO}" alt="Damião"><b style="font-family:var(--fd)" id="mtit"></b></div>
   <div class="adm"><aside class="side" id="side"><div class="top"><img src="${LOGO}" alt="Damião Burguer Shop"><div class="who"><b>${esc(ME.nome)}</b>${esc(ME.papelNome)}</div></div>
    <nav aria-label="Painel">${itens.map(([k,t,i])=>`<button data-v="${k}" aria-current="${k===VIEW}">${i}${t}</button>`).join('')}</nav>
@@ -591,7 +663,7 @@ function iniciarPainel(){
 function iniciarLojaEquipe(){ // equipe vê a loja com o preço padrão
   iniciarLoja().then(()=>{const h=$('.shop-h .wrap');const b=document.createElement('button');b.className='hbtn';b.innerHTML=ICON.dash+'<span>Voltar ao painel</span>';b.onclick=iniciarPainel;h.insertBefore(b,h.children[1])});
 }
-function abrirView(){if(VIEW!=='rotas')pararRastreio();$('#mtit').textContent=({rotas:'Rotas',dashboard:'Dashboard',pedidos:'Pedidos',novo:'Novo pedido',clientes:'Clientes',produtos:'Produtos',tabelas:'Tabelas de preço',usuarios:'Usuários',config:'Configurações'})[VIEW];({rotas:vRotas,dashboard:vDashboard,pedidos:vPedidos,novo:vNovo,clientes:vClientes,produtos:vProdutos,tabelas:vTabelas,usuarios:vUsuarios,config:vConfig})[VIEW]()}
+function abrirView(){if(VIEW!=='rotas')pararRastreio();$('#mtit').textContent=({rotas:'Rotas',dashboard:'Dashboard',pedidos:'Pedidos',novo:'Novo pedido',clientes:'Clientes',produtos:'Produtos',tabelas:'Tabelas de preço',usuarios:'Usuários',config:'Configurações',estoque:'Estoque'})[VIEW];({estoque:vEstoque,rotas:vRotas,dashboard:vDashboard,pedidos:vPedidos,novo:vNovo,clientes:vClientes,produtos:vProdutos,tabelas:vTabelas,usuarios:vUsuarios,config:vConfig})[VIEW]()}
 const M=()=>$('#main');
 
 /* ---- dashboard ---- */
@@ -666,23 +738,23 @@ async function vNovo(){
 /* ---- clientes ---- */
 let CLIS=[],USERS=null,TABS=null;
 async function vClientes(){
-  const g=GESTAO();
-  M().innerHTML=`<div class="ph"><div><h1>${g?'Clientes':'Meus clientes'}</h1><p>${g?'Escolha quais clientes cada vendedor vê.':'Clientes da sua carteira, definidos pelo administrador.'}</p></div>
+  const g=GESTAO(),op=OPER(),gv=g||op;
+  M().innerHTML=`<div class="ph"><div><h1>${gv?'Clientes':'Meus clientes'}</h1><p>${g?'Escolha quais clientes cada vendedor vê.':op?'Todos os clientes. Você pode cadastrar e editar.':'Clientes da sua carteira, definidos pelo administrador.'}</p></div>
    <div class="toolbar">${g?'<button class="btn o sm" id="cimp">Importar do Bling</button>':''}<button class="btn sm" id="cnovo">Novo cliente</button></div></div>
   <div class="toolbar"><input class="inp" id="cb" placeholder="Buscar nome, cidade ou documento" aria-label="Buscar">
-   <select class="inp" id="cf" style="flex:0 0 220px" aria-label="Filtro"><option value="">Todos</option><option value="pendente">Aguardando aprovação</option><option value="aprovado">Aprovados</option><option value="bloqueado">Bloqueados</option><option value="semend">Sem endereço (fora da rota)</option>${g?'<option value="semvend">Sem vendedor</option>':''}</select>
-   ${g?'<select class="inp" id="cv" style="flex:0 0 200px" aria-label="Vendedor"><option value="">Todos os vendedores</option></select>':''}</div>
+   <select class="inp" id="cf" style="flex:0 0 220px" aria-label="Filtro"><option value="">Todos</option><option value="pendente">Aguardando aprovação</option><option value="aprovado">Aprovados</option><option value="bloqueado">Bloqueados</option><option value="semend">Sem endereço (fora da rota)</option>${gv?'<option value="semvend">Sem vendedor</option>':''}</select>
+   ${gv?'<select class="inp" id="cv" style="flex:0 0 200px" aria-label="Vendedor"><option value="">Todos os vendedores</option></select>':''}</div>
   <div class="sel-bar" id="csel" hidden><b id="cseln"></b><span>Atribuir ao vendedor:</span><select class="inp" id="csv" style="width:auto;height:36px"></select><button class="btn sm" id="csok">Atribuir</button><button class="btn o sm" id="csx">Limpar seleção</button></div>
   <div class="scroll" id="ct"><div class="empty"><b>Carregando…</b></div></div>`;
   const sel=new Set();
-  try{const r=await Promise.all([api('listarClientes',{},true),g?api('listarUsuarios',{},true):Promise.resolve([]),api('listarTabelas',{},true)]);CLIS=r[0];USERS=r[1];TABS=r[2]}catch(e){falha(e)}
+  try{const r=await Promise.all([api('listarClientes',{},true),g?api('listarUsuarios',{},true):op?api('equipeResumo',{},true):Promise.resolve([]),api('listarTabelas',{},true)]);CLIS=r[0];USERS=r[1];TABS=r[2]}catch(e){falha(e)}
   const vend=(USERS||[]).filter(u=>u.ativo==='sim').sort((a,b)=>(a.papel==='vendedor'?0:1)-(b.papel==='vendedor'?0:1)||a.nome.localeCompare(b.nome,'pt'));
   if(g){$('#cv').innerHTML='<option value="">Todos os vendedores</option>'+vend.map(v=>`<option value="${v.id}">${esc(v.nome)}</option>`).join('');$('#csv').innerHTML='<option value="">— Nenhum —</option>'+vend.map(v=>`<option value="${v.id}">${esc(v.nome)}</option>`).join('')}
   const pill=s=>({pendente:'<span class="pill p-wait">Aguardando</span>',aprovado:'<span class="pill p-ok">Aprovado</span>',bloqueado:'<span class="pill p-bad">Bloqueado</span>'}[s]||'');
-  const render=()=>{const q=norm($('#cb').value),f=$('#cf').value,v=g?$('#cv').value:'';
+  const render=()=>{const q=norm($('#cb').value),f=$('#cf').value,v=gv?$('#cv').value:'';
     const l=CLIS.filter(c=>(!f||(f==='semvend'?!c.vendedorId:f==='semend'?!(c.endereco&&c.cidade):c.status===f))&&(!v||c.vendedorId===v)&&(!q||norm([c.nome,c.fantasia,c.cidade,c.documento].join(' ')).includes(q)))
       .sort((a,b)=>(a.status==='pendente'?-1:0)-(b.status==='pendente'?-1:0)||(a.fantasia||a.nome).localeCompare(b.fantasia||b.nome,'pt'));
-    $('#ct').innerHTML=l.length?`<table class="t"><thead><tr>${g?'<th><input type="checkbox" class="chk" id="call" aria-label="Selecionar todos"></th>':''}<th>Cliente</th><th>Cidade</th>${g?'<th>Vendedor</th>':''}<th>Tabela</th><th>Situação</th><th class="r">Pedidos</th><th class="r">Faturado</th></tr></thead><tbody>${l.map(c=>`<tr class="click" data-id="${c.id}">${g?`<td><input type="checkbox" class="chk" data-s="${c.id}" ${sel.has(c.id)?'checked':''} aria-label="Selecionar"></td>`:''}<td><b>${esc(c.fantasia||c.nome)}</b>${c.fantasia&&c.fantasia!==c.nome?`<div style="font-size:12px;color:var(--muted)">${esc(c.nome)}</div>`:''}</td><td>${esc(c.cidade)}</td>${g?`<td>${c.vendedorNome?esc(c.vendedorNome):'<span class="pill p-wait">Sem vendedor</span>'}</td>`:''}<td>${esc(c.tabelaNome)}</td><td>${pill(c.status)}</td><td class="r num">${c.pedidos}</td><td class="r num">${R$(c.faturado)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum cliente</b>'+(g?'Use "Importar do Bling" para trazer a carteira.':'O administrador ainda não vinculou clientes a você.')+'</div>';
+    $('#ct').innerHTML=l.length?`<table class="t"><thead><tr>${g?'<th><input type="checkbox" class="chk" id="call" aria-label="Selecionar todos"></th>':''}<th>Cliente</th><th>Cidade</th>${gv?'<th>Vendedor</th>':''}<th>Tabela</th><th>Situação</th><th class="r">Pedidos</th>${op?'':'<th class="r">Faturado</th>'}</tr></thead><tbody>${l.map(c=>`<tr class="click" data-id="${c.id}">${g?`<td><input type="checkbox" class="chk" data-s="${c.id}" ${sel.has(c.id)?'checked':''} aria-label="Selecionar"></td>`:''}<td><b>${esc(c.fantasia||c.nome)}</b>${c.fantasia&&c.fantasia!==c.nome?`<div style="font-size:12px;color:var(--muted)">${esc(c.nome)}</div>`:''}</td><td>${esc(c.cidade)}</td>${gv?`<td>${c.vendedorNome?esc(c.vendedorNome):'<span class="pill p-wait">Sem vendedor</span>'}</td>`:''}<td>${esc(c.tabelaNome)}</td><td>${pill(c.status)}</td><td class="r num">${c.pedidos}</td>${op?'':`<td class="r num">${R$(c.faturado)}</td>`}</tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum cliente</b>'+(g?'Use "Importar do Bling" para trazer a carteira.':'O administrador ainda não vinculou clientes a você.')+'</div>';
     const n=sel.size;$('#csel').hidden=!n;$('#cseln').textContent=n+' selecionado'+(n>1?'s':'');
     window.__lista=l;
   };
@@ -701,7 +773,7 @@ async function vClientes(){
   render();
 }
 function editarCliente(c){
-  const g=GESTAO(),n=!c;c=c||{tipo:'PJ',uf:'SP',status:'aprovado',tabelaId:'padrao'};
+  const g=GESTAO(),gv=g||OPER(),n=!c;c=c||{tipo:'PJ',uf:'SP',status:'aprovado',tabelaId:'padrao'};
   const vend=(USERS||[]).filter(u=>u.ativo==='sim');
   const f=(id,l,v,t='text')=>`<div class="field"><label for="${id}">${l}</label><input id="${id}" type="${t}" value="${esc(v||'')}"></div>`;
   const m=modal(`<header><h3>${n?'Novo cliente':esc(c.fantasia||c.nome)}</h3><button data-fechar>×</button></header><div class="body">
@@ -709,9 +781,9 @@ function editarCliente(c){
    <div class="grid2">${f('e1','Razão social / Nome',c.nome)}${f('e2','Nome fantasia',c.fantasia)}
     <div class="field"><label for="e3">Tipo</label><select id="e3"><option ${c.tipo==='PJ'?'selected':''} value="PJ">Pessoa Jurídica</option><option ${c.tipo==='PF'?'selected':''} value="PF">Pessoa Física</option></select></div>
     ${f('e4','CNPJ / CPF',c.documento)}${f('e5','E-mail',c.email,'email')}${f('e6','WhatsApp',c.telefone)}${f('e7','CEP',c.cep)}${f('e8','Endereço',c.endereco)}${f('e9','Número',c.numero)}${f('e10','Bairro',c.bairro)}${f('e11','Cidade',c.cidade)}${f('e12','UF',c.uf)}
-    ${g?`<div class="field"><label for="e13">Vendedor</label><select id="e13"><option value="">— Sem vendedor —</option>${vend.map(v=>`<option value="${v.id}" ${v.id===c.vendedorId?'selected':''}>${esc(v.nome)}</option>`).join('')}</select></div>
+    ${gv?`<div class="field"><label for="e13">Vendedor</label><select id="e13"><option value="">— Sem vendedor —</option>${vend.map(v=>`<option value="${v.id}" ${v.id===c.vendedorId?'selected':''}>${esc(v.nome)}</option>`).join('')}</select></div>
     <div class="field"><label for="e14">Tabela de preço</label><select id="e14">${(TABS||[]).map(t=>`<option value="${t.id}" ${t.id===c.tabelaId?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
-    <div class="field"><label for="e15">Situação</label><select id="e15">${[['aprovado','Aprovado'],['pendente','Aguardando aprovação'],['bloqueado','Bloqueado']].map(([k,l])=>`<option value="${k}" ${k===c.status?'selected':''}>${l}</option>`).join('')}</select></div>`:''}
+    ${g?`<div class="field"><label for="e15">Situação</label><select id="e15">${[['aprovado','Aprovado'],['pendente','Aguardando aprovação'],['bloqueado','Bloqueado']].map(([k,l])=>`<option value="${k}" ${k===c.status?'selected':''}>${l}</option>`).join('')}</select></div>`:''}`:''}
    </div>${g?`<div class="field"><label>Formas de pagamento liberadas na loja</label><div id="efp" style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--muted)">Carregando…</div><div style="font-size:12.5px;color:var(--muted)">Só o Master e o Administrador liberam. Sem nenhuma marcada, o cliente vê as formas padrão de Configurações.</div></div>`:''}
    ${g&&!n&&c.temAcesso?`<div class="field"><label for="e17">Senha de acesso ao App</label><div style="display:flex;gap:8px"><input id="e17" type="text" autocomplete="off" placeholder="Nova senha (mínimo 6 caracteres)" style="flex:1"><button type="button" class="btn o sm" id="esen">Alterar senha</button></div><div style="font-size:12.5px;color:var(--muted)">Só o Master e o Administrador alteram. Passe a nova senha ao cliente.</div></div>`:''}
    <div class="field"><label for="e16">Observações internas</label><textarea id="e16">${esc(c.obs||'')}</textarea></div>
@@ -781,7 +853,7 @@ async function vUsuarios(){
   const ed=u=>{const n=!u;u=u||{papel:'vendedor',ativo:'sim'};const master=ME.papel==='master';
     const m=modal(`<header><h3>${n?'Novo usuário':esc(u.nome)}</h3><button data-fechar>×</button></header><div class="body"><div class="grid2">
      <div class="field"><label for="u1">Nome</label><input id="u1" value="${esc(u.nome||'')}"></div><div class="field"><label for="u2">E-mail (login)</label><input id="u2" type="email" value="${esc(u.email||'')}"></div>
-     <div class="field"><label for="u3">Perfil</label><select id="u3" ${u.papel==='master'?'disabled':''}>${[['vendedor','Vendedor'],['motorista','Motorista'],['caixa','Operador de caixa'],['admin','Administrador geral']].concat(u.papel==='master'?[['master','Master']]:[]).filter(([k])=>master||k==='vendedor'||k==='motorista'||k===u.papel).map(([k,l])=>`<option value="${k}" ${k===u.papel?'selected':''}>${l}</option>`).join('')}</select></div>
+     <div class="field"><label for="u3">Perfil</label><select id="u3" ${u.papel==='master'?'disabled':''}>${[['vendedor','Vendedor'],['operacional','Operacional'],['motorista','Motorista'],['caixa','Operador de caixa'],['admin','Administrador geral']].concat(u.papel==='master'?[['master','Master']]:[]).filter(([k])=>master||k==='vendedor'||k==='motorista'||k===u.papel).map(([k,l])=>`<option value="${k}" ${k===u.papel?'selected':''}>${l}</option>`).join('')}</select></div>
      <div class="field"><label for="u4">Vendedor no Bling</label><select id="u4"><option value="">— Nenhum —</option>${vb.map(v=>`<option value="${v.id}" ${String(v.id)===String(u.blingVendedorId)?'selected':''}>${esc(v.nome)}</option>`).join('')}</select></div>
      ${['admin','master'].includes(u.papel)||n?`<div class="field"><label>Entregas</label><label style="display:flex;gap:8px;align-items:center;height:42px"><input type="checkbox" id="u8" ${u.tambemMotorista==='sim'?'checked':''}> Também faz entregas (aparece como motorista)</label></div>`:''}
      <div class="field"><label for="u7">WhatsApp (avisos de pedido)</label><input id="u7" inputmode="tel" placeholder="(15) 99999-9999" value="${esc(u.telefone||'')}"></div>
@@ -847,15 +919,15 @@ function iniciarRastreio(romId,onEstado){
   pararRastreio.t=setInterval(()=>{if(ult)api('posicaoMotorista',{lat:ult.latitude,lng:ult.longitude,precisao:Math.round(ult.accuracy||0),romaneioId:romId},true).then(tratarEtas).catch(()=>{})},60000);
 }
 async function vRotas(){
-  const g=GESTAO();
+  const g=GOP(),gg=GESTAO();
   M().innerHTML=`<div class="ph"><div><h1>${g?'Rotas e entregas':'Minhas rotas'}</h1><p>Escolha os pedidos do dia, gere o romaneio, imprima as etiquetas e siga a rota pelo Google Maps.</p></div>
-   <div class="toolbar">${g?'<button class="btn o sm" id="rlive">Acompanhar motoristas</button>':''}<button class="btn y" id="rnovo">${ICON.novo.replace('<svg','<svg width="18" height="18"')}Novo romaneio</button></div></div>
+   <div class="toolbar">${gg?'<button class="btn o sm" id="rlive">Acompanhar motoristas</button>':''}<button class="btn y" id="rnovo">${ICON.novo.replace('<svg','<svg width="18" height="18"')}Novo romaneio</button></div></div>
    <div class="tabs" role="tablist" style="max-width:420px;margin-bottom:12px"><button data-rt="abertos" aria-pressed="true">Romaneios abertos</button><button data-rt="rel" aria-pressed="false">Relatório</button></div>
    <div id="rfilt" class="toolbar" hidden><label style="display:flex;flex-direction:column;font-size:12.5px;color:var(--muted)">De<input type="date" class="inp" id="rdi" style="width:170px" value="${hojeStr().slice(0,8)}01"></label><label style="display:flex;flex-direction:column;font-size:12.5px;color:var(--muted)">Até<input type="date" class="inp" id="rdf" style="width:170px" value="${hojeStr()}"></label>
     <label style="display:flex;flex-direction:column;font-size:12.5px;color:var(--muted)">Situação<select class="inp" id="rst" style="width:190px"><option value="">Todas</option><option value="abertos">Abertos (Aberto + Em andamento)</option><option>Aberto</option><option>Em andamento</option><option>Concluído</option><option>Cancelado</option></select></label>
     <button class="btn sm" id="rbus" style="align-self:flex-end">Pesquisar</button><button class="btn o sm" id="rprt" style="align-self:flex-end">Imprimir relatório</button></div>
    <div id="rlist"><div class="empty"><b>Carregando…</b></div></div>`;
-  $('#rnovo').onclick=novoRomaneio;if(g)$('#rlive').onclick=acompanhar;
+  $('#rnovo').onclick=novoRomaneio;if(gg)$('#rlive').onclick=acompanhar;
   let aba='abertos',ULT=[];
   const pill=s=>`<span class="pill ${s==='Concluído'?'p-ok':s==='Cancelado'?'p-bad':s==='Em andamento'?'p-info':'p-wait'}">${esc(s)}</span>`;
   const cards=l=>l.length?`<div class="rcards">${l.map(r=>`<button class="rcard" data-r="${r.id}"><span style="display:flex;justify-content:space-between;align-items:center"><b>Romaneio ${r.numero}</b>${pill(r.status)}</span><span>${dt(r.data+'T12:00:00')} · ${r.entregues}/${r.paradas} entrega${r.paradas>1?'s':''} · ${r.km.toLocaleString('pt-BR')} km</span><span style="color:var(--muted);font-size:13px">${r.motorista?'Motorista: '+esc(r.motorista):'Sem motorista definido'}</span></button>`).join('')}</div>`:'<div class="empty"><b>Nenhum romaneio aberto</b>Clique em "Novo romaneio" para montar a rota do dia. Os finalizados ficam no Relatório.</div>';
@@ -872,7 +944,7 @@ async function vRotas(){
   carregar();
 }
 async function novoRomaneio(){
-  const g=GESTAO();
+  const g=GOP();
   M().innerHTML=`<div class="ph"><div><h1>Novo romaneio</h1><p>Marque os pedidos que saem hoje e confira a quantidade de caixas de cada um.</p></div><button class="btn o sm" id="nrv">Voltar</button></div><div id="nrb"><div class="empty"><b>Carregando pedidos…</b></div></div>`;
   $('#nrv').onclick=vRotas;
   let peds,cfgR,mots=[];
@@ -898,7 +970,7 @@ async function novoRomaneio(){
 }
 async function verRomaneio(id){try{mostrarRomaneio(await api('abrirRomaneio',{id}))}catch(e){falha(e)}}
 function mostrarRomaneio(r){
-  ROM_ATUAL=r;const g=GESTAO(),MOT=ME.papel==='motorista';
+  ROM_ATUAL=r;const g=GOP(),MOT=ME.papel==='motorista';
   const pend=r.paradas.filter(p=>p.status!=='Entregue'),feitas=r.paradas.length-pend.length,cx=r.paradas.reduce((s,p)=>s+p.caixas,0);
   // trechos de até 9 paradas (limite do link do Google Maps)
   const pontos=r.paradas.filter(p=>p.status!=='Entregue').map(p=>p.destino),trechos=[];
