@@ -291,6 +291,8 @@ async function boot(){
   try{
     const r=await api('inicio');ME=r.usuario;LOJA=r.loja||{};
     if(!r.instalado)return telaInstalacao();
+    // Uma sessão salva do caixa não deve redirecionar a página dos clientes.
+    if(ME&&ME.papel==='caixa'){TOKEN='';ME=null;store.del('dm_tok');return iniciarLoja();}
     if(ME&&ME.papel!=='cliente')return iniciarPainel();
     iniciarLoja();
   }catch(e){$('#root').innerHTML=`<div class="wrap"><div class="empty"><b>Não foi possível abrir o App</b>${esc(e.message)}</div></div>`}
