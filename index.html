@@ -586,14 +586,6 @@ function detalhePedido(p,equipe,onChange){
 
 /* ---- pedido: imprimir e editar ---- */
 const PED_EDITAVEL=['Recebido','Em separação','Enviado ao Bling'];
-function imprimirPedido(p){
-  const itens=p.itens||[];
-  imprimir(`<div class="pr-rom"><h1>Pedido nº ${esc(p.numero)}</h1><div>${esc(p.cliente||'')}${p.cidade?' · '+esc(p.cidade):''}</div><div>Data: ${dth(p.data)}${p.vendedor?' · Vendedor: '+esc(p.vendedor):''}${p.blingNumero?' · Bling nº '+esc(p.blingNumero):''} · Situação: ${esc(p.status)}</div>
-   <table><thead><tr><th style="width:10mm">✓</th><th>Produto</th><th style="width:24mm">Código</th><th style="width:20mm">Qtd.</th><th style="width:24mm">Preço</th><th style="width:26mm">Total</th></tr></thead><tbody>${itens.map(i=>`<tr><td></td><td>${esc(i.nome)}</td><td>${esc(i.codigo||'')}</td><td>${esc(i.qtd)} ${esc(i.unidade||'')}</td><td>${R$(i.preco)}</td><td>${R$(i.total)}</td></tr>`).join('')}</tbody>
-   <tfoot>${p.frete?`<tr><td colspan="5" style="text-align:right">Frete</td><td>${R$(p.frete)}</td></tr>`:''}<tr><td colspan="5" style="text-align:right"><b>Total do pedido</b></td><td><b>${R$(p.total)}</b></td></tr></tfoot></table>
-   ${p.obs?`<p><b>Obs.:</b> ${esc(p.obs)}</p>`:''}
-   <p style="margin-top:12mm">Separado por: ______________________________ &nbsp; Conferido por: ______________________________</p></div>`,'size:A4;margin:0');
-}
 async function editarPedido(p,onChange){
   let cat;try{cat=await api('catalogoLoja',{clienteId:p.clienteId})}catch(e){falha(e);return}
   let formas=[];try{formas=FORMAS||await api('formasPagamento',{},true)}catch(e){}
@@ -624,7 +616,7 @@ async function editarPedido(p,onChange){
 /* ---- estoque (Operacional, Administrador e Master) ---- */
 async function vEstoque(){
   M().innerHTML=`<div class="ph"><div><h1>Estoque</h1><p>Saldo do Bling. Lance aqui as entradas de mercadoria conforme chegam; saídas e ajustes só no Bling.</p></div>
-   <div class="toolbar"><button class="btn o sm" id="eshist">Últimas entradas</button><button class="btn o sm" id="esimp">Imprimir conferência</button><button class="btn sm" id="esref">Atualizar</button></div></div>
+   <div class="toolbar"><button class="btn g" id="esnovo">Novo lançamento</button><button class="btn o sm" id="eslotes">Lançamentos</button><button class="btn o sm" id="eshist">Últimas entradas</button><button class="btn o sm" id="esimp">Imprimir conferência</button><button class="btn sm" id="esref">Atualizar</button></div></div>
    <div class="toolbar"><input class="inp" id="esb" placeholder="Buscar produto ou código" aria-label="Buscar"></div>
    <div class="scroll" id="est"><div class="empty"><b>Buscando o estoque no Bling…</b>Pode levar alguns segundos.</div></div>`;
   let L=[];
@@ -632,15 +624,9 @@ async function vEstoque(){
     $('#est').innerHTML=l.length?`<table class="t"><thead><tr><th>Produto</th><th>Código</th><th>Un.</th><th class="r">Saldo</th><th></th></tr></thead><tbody>${l.map(x=>`<tr><td><b>${esc(x.nome)}</b></td><td>${esc(x.codigo||'')}</td><td>${esc(x.unidade||'')}</td><td class="r num"><b>${x.saldo==null?'—':String(x.saldo).replace('.',',')}</b></td><td class="r"><button class="btn sm g" data-ent="${esc(x.id)}">+ Entrada</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum produto encontrado</b></div>'};
   const carregar=async()=>{try{L=await api('estoqueSaldos',{},true);render()}catch(e){$('#est').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}};
   $('#esb').oninput=render;$('#esref').onclick=()=>{$('#est').innerHTML='<div class="empty"><b>Atualizando…</b></div>';carregar()};
-  $('#est').onclick=e=>{const b=e.target.closest('[data-ent]');if(!b)return;const x=L.find(y=>String(y.id)===b.dataset.ent);
-    const m=modal(`<header><h3>Entrada de estoque</h3><button data-fechar>×</button></header><div class="body">
-      <div><b>${esc(x.nome)}</b> · saldo atual ${x.saldo==null?'—':String(x.saldo).replace('.',',')} ${esc(x.unidade||'')}</div>
-      <div class="grid2"><div class="field"><label for="enq">Quantidade que chegou</label><input id="enq" inputmode="decimal" placeholder="Ex.: 20"></div>
-      <div class="field"><label for="eno">Observação (nota, fornecedor)</label><input id="eno" placeholder="Ex.: NF 1234 · Fornecedor"></div></div>
-      <div style="font-size:13px;color:var(--muted)">Só entradas. Para retirar ou corrigir saldo, fale com o Master ou o Administrador.</div>
-     </div><footer><button class="btn o" data-fechar>Cancelar</button><button class="btn g" id="ensv">Lançar entrada</button></footer>`);
-    m.querySelector('#ensv').onclick=async()=>{const q=+String(m.querySelector('#enq').value).replace(',','.');if(!(q>0)){toast('Informe uma quantidade maior que zero.');return}
-      try{const r=await api('estoqueEntrada',{produtoId:x.id,quantidade:q,obs:m.querySelector('#eno').value});x.saldo=r.saldo;toast('Entrada lançada no Bling: +'+String(q).replace('.',',')+' '+(x.unidade||''));m.fechar();render()}catch(err){falha(err)}}};
+  $('#esnovo').onclick=()=>{if(!L.length){toast('Aguarde os produtos carregarem.');return}abrirLancamentoEstoque(L)};
+  $('#eslotes').onclick=verLancamentosEstoque;
+  $('#est').onclick=e=>{const b=e.target.closest('[data-ent]');if(!b)return;const x=L.find(y=>String(y.id)===b.dataset.ent);if(x)abrirLancamentoEstoque(L,x)};
   $('#esimp').onclick=()=>{if(!L.length){toast('Aguarde o estoque carregar.');return}
     imprimir(`<div class="pr-rom"><h1>Conferência de estoque</h1><div>Damião Pães · ${new Date().toLocaleString('pt-BR')} · Conferido por: ${esc(ME.nome)}</div>
      <table><thead><tr><th>Produto</th><th style="width:24mm">Código</th><th style="width:12mm">Un.</th><th style="width:22mm">Sistema</th><th style="width:24mm">Contado</th><th style="width:24mm">Diferença</th></tr></thead>
@@ -648,6 +634,85 @@ async function vEstoque(){
      <p style="margin-top:10mm">Assinatura: ______________________________ &nbsp; Data: ___/___/______</p></div>`,'size:A4;margin:0')};
   $('#eshist').onclick=async()=>{try{const h=await api('estoqueEntradas',{});modal(`<header><h3>Últimas entradas</h3><button data-fechar>×</button></header><div class="body"><div class="scroll"><table class="t"><thead><tr><th>Data</th><th>Produto</th><th class="r">Qtd.</th><th>Por</th><th>Obs.</th><th>Bling</th></tr></thead><tbody>${h.map(e=>`<tr><td>${dth(e.data)}</td><td>${esc(e.produto)}</td><td class="r num">${String(e.quantidade).replace('.',',')}</td><td>${esc(e.usuario)}</td><td>${esc(e.obs||'')}</td><td>${e.erro?'<span class="pill p-bad">Erro</span>':'<span class="pill p-ok">Lançado</span>'}</td></tr>`).join('')||'<tr><td colspan="6">Nenhuma entrada ainda.</td></tr>'}</tbody></table></div></div>`,{wide:true})}catch(e){falha(e)}};
   carregar();
+}
+
+/* Entrada individual e em lote compartilham revisão, custo e proteção contra repetição. */
+function estoqueValor(v){const s=String(v??'').trim();return s?Number(s.includes(',')?s.replace(/\./g,'').replace(',','.'):s):NaN}
+function estoqueRascunhoChave(){return 'dm_estoque_rascunho_'+ME.id}
+function estoqueLerRascunho(){try{return JSON.parse(store.get(estoqueRascunhoChave())||'null')}catch(e){return null}}
+function estoqueNovoRascunho(){return {id:crypto.randomUUID(),itens:[],fornecedor:'',obs:'',enviado:false}}
+function abrirLancamentoEstoque(produtos,selecionado){
+  let r=estoqueLerRascunho()||estoqueNovoRascunho(),editando=-1,busy=false;
+  const salvar=()=>store.set(estoqueRascunhoChave(),JSON.stringify(r));
+  const label=p=>(p.codigo?p.codigo+' · ':'')+p.nome;
+  M().innerHTML=`<div class="ph"><div><h1>Novo lançamento</h1><p>Adicione os produtos recebidos e confira a compra antes de concluir.</p></div><button class="btn o sm" id="elvoltar">Voltar ao estoque</button></div>
+    <div id="elaviso" role="status" aria-live="polite"></div>
+    <form class="card" id="elitem" style="padding:18px;display:flex;flex-direction:column;gap:14px">
+      <h3 style="font-size:16px">Adicionar produto</h3>
+      <div class="field"><label for="elproduto">Produto</label><input id="elproduto" list="elprodutos" placeholder="Busque pelo nome ou código" autocomplete="off" required><datalist id="elprodutos">${produtos.map(p=>`<option value="${esc(label(p))}"></option>`).join('')}</datalist></div>
+      <div id="elsaldo" style="font-size:13px;color:var(--muted)"></div>
+      <div class="grid2"><div class="field"><label for="elpreco">Preço de compra unitário (R$)</label><input id="elpreco" inputmode="decimal" placeholder="0,00" required></div>
+      <div class="field"><label for="elqtd">Quantidade recebida</label><input id="elqtd" inputmode="decimal" placeholder="Ex.: 10" required></div></div>
+      <div><button class="btn" id="eladicionar" type="submit">Adicionar à lista</button> <button class="btn o" id="elcancelaredicao" type="button" hidden>Cancelar edição</button></div>
+    </form>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><h3 style="font-size:16px">Produtos do lançamento</h3><div id="ellista" class="scroll"></div><div id="eltotal" class="tot"></div></div>
+    <form class="card" id="elfinal" style="padding:18px;display:flex;flex-direction:column;gap:14px">
+      <h3 style="font-size:16px">Informações da compra</h3><div class="field"><label for="elfornecedor">Fornecedor</label><input id="elfornecedor" maxlength="150" value="${esc(r.fornecedor)}" placeholder="Nome do fornecedor" required></div>
+      <div class="field"><label for="elobs">Observações</label><textarea id="elobs" maxlength="1000" placeholder="Nota fiscal, data do recebimento ou outras informações">${esc(r.obs)}</textarea></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><span id="elrascunho" style="font-size:13px;color:var(--muted)">Rascunho salvo neste navegador.</span><button class="btn g" type="submit" id="elconcluir">Concluir lançamento de estoque</button></div>
+    </form>`;
+  const el=s=>$(s),produto=()=>produtos.find(p=>label(p)===el('#elproduto').value);
+  const travar=()=>{$('#elitem input, #elitem button, #elfornecedor, #elobs, #ellista button').forEach(e=>e.disabled=r.enviado||busy);el('#elvoltar').disabled=busy;el('#elconcluir').disabled=busy||!r.itens.length;el('#elconcluir').textContent=busy?'Aguarde…':r.enviado?'Verificar lançamento':'Concluir lançamento de estoque';};
+  const render=()=>{
+    el('#ellista').innerHTML=r.itens.length?`<table class="t"><thead><tr><th>Produto</th><th class="r">Preço de compra</th><th class="r">Quantidade</th><th class="r">Subtotal</th><th></th></tr></thead><tbody>${r.itens.map((i,n)=>`<tr><td><b>${esc(i.produto)}</b><div style="font-size:12px;color:var(--muted)">${esc(i.codigo)} · ${esc(i.unidade)}</div></td><td class="r num">${R$(i.precoCompra)}</td><td class="r num">${i.quantidade.toLocaleString('pt-BR')}</td><td class="r num">${R$(Math.round(i.precoCompra*i.quantidade*100)/100)}</td><td class="r"><button type="button" class="btn o sm" data-editar="${n}">Editar</button> <button type="button" class="btn o sm" data-remover="${n}">Remover</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum produto adicionado</b>Escolha o produto, informe o preço e a quantidade e clique em Adicionar à lista.</div>';
+    el('#eltotal').innerHTML=`<span>Total · ${r.itens.length} produto${r.itens.length===1?'':'s'}</span><span class="num">${R$(r.itens.reduce((s,i)=>s+Math.round(i.precoCompra*i.quantidade*100),0)/100)}</span>`;travar();
+  };
+  const limpar=()=>{editando=-1;el('#elitem').reset();el('#elsaldo').textContent='';el('#eladicionar').textContent='Adicionar à lista';el('#elcancelaredicao').hidden=true;};
+  el('#elproduto').oninput=()=>{const p=produto();el('#elsaldo').textContent=p?'Saldo atual: '+(p.saldo==null?'—':Number(p.saldo).toLocaleString('pt-BR'))+' '+(p.unidade||''):'';};
+  el('#elitem').onsubmit=e=>{
+    e.preventDefault();if(busy||r.enviado)return;
+    const p=produto(),q=estoqueValor(el('#elqtd').value),preco=estoqueValor(el('#elpreco').value);
+    if(!p){toast('Escolha um produto da lista.');return}
+    if(!Number.isFinite(q)||q<=0||q>1000000){toast('Informe uma quantidade maior que zero.');return}
+    if(!Number.isFinite(preco)||preco<0||preco>10000000){toast('Informe um preço de compra válido.');return}
+    const repetido=r.itens.findIndex((i,n)=>String(i.produtoId)===String(p.id)&&n!==editando);
+    if(repetido>=0){toast('Esse produto já está na lista. Use Editar para ajustar o item.');return}
+    if(editando<0&&r.itens.length>=50){toast('Cada lançamento pode ter até 50 produtos.');return}
+    const i={produtoId:String(p.id),produto:p.nome,codigo:p.codigo||'',unidade:p.unidade||'',quantidade:q,precoCompra:Math.round(preco*100)/100};
+    if(editando>=0)r.itens[editando]=i;else r.itens.push(i);salvar();limpar();render();el('#elproduto').focus();
+  };
+  el('#ellista').onclick=e=>{
+    if(busy||r.enviado)return;
+    const rem=e.target.closest('[data-remover]'),ed=e.target.closest('[data-editar]');
+    if(rem){const n=+rem.dataset.remover;r.itens.splice(n,1);limpar();salvar();render();}
+    if(ed){editando=+ed.dataset.editar;const i=r.itens[editando],p=produtos.find(p=>String(p.id)===String(i.produtoId));el('#elproduto').value=p?label(p):i.produto;el('#elpreco').value=i.precoCompra.toFixed(2).replace('.',',');el('#elqtd').value=String(i.quantidade).replace('.',',');el('#eladicionar').textContent='Salvar item';el('#elcancelaredicao').hidden=false;el('#elproduto').oninput();el('#elpreco').focus();}
+  };
+  el('#elcancelaredicao').onclick=limpar;
+  el('#elfornecedor').oninput=()=>{r.fornecedor=el('#elfornecedor').value;salvar();};
+  el('#elobs').oninput=()=>{r.obs=el('#elobs').value;salvar();};
+  el('#elvoltar').onclick=()=>{if(!busy)vEstoque();};
+  function resultado(x){
+    if(x.estado==='concluido'){
+      store.del(estoqueRascunhoChave());
+      M().innerHTML=`<div class="ph"><div><h1>Lançamento concluído</h1><p>As entradas foram registradas no Bling.</p></div></div><div class="card" style="padding:20px;display:flex;flex-direction:column;gap:14px"><div class="msg ok">${x.itens.length} produto${x.itens.length===1?'':'s'} lançado${x.itens.length===1?'':'s'} com sucesso.</div><div><b>Fornecedor:</b> ${esc(x.fornecedor)}</div><div><b>Total da compra:</b> ${R$(x.total)}</div>${x.obs?`<div><b>Observações:</b> ${esc(x.obs)}</div>`:''}<div style="font-size:13px;color:var(--muted)">Responsável: ${esc(x.usuario)} · ${dth(x.data)}<br>Lançamento ${esc(x.id)}</div><div><button class="btn" id="elestoque">Voltar ao estoque</button> <button class="btn o" id="eloutro">Novo lançamento</button></div></div>`;
+      el('#elestoque').onclick=vEstoque;el('#eloutro').onclick=()=>abrirLancamentoEstoque(produtos);return;
+    }
+    const lancados=x.itens.filter(i=>i.estado==='lancado').length;
+    el('#elaviso').innerHTML=`<div class="msg bad"><b>Lançamento aguardando conferência</b><p>${lancados} de ${x.itens.length} produtos confirmados. Os itens enviados não serão repetidos. Peça ao Master ou Administrador para conferir este lançamento no Bling.</p><div class="scroll"><table class="t"><thead><tr><th>Produto</th><th>Situação</th></tr></thead><tbody>${x.itens.map(i=>`<tr><td>${esc(i.produto)}</td><td>${i.estado==='lancado'?'Lançado':i.estado==='pendente'?'Não enviado':'Conferir no Bling'}</td></tr>`).join('')}</tbody></table></div><p style="font-size:12px">Referência: ${esc(x.id)}</p></div>`;
+  }
+  el('#elfinal').onsubmit=async e=>{
+    e.preventDefault();if(busy||!r.itens.length)return;
+    if(!r.enviado&&(editando>=0||el('#elproduto').value.trim()||el('#elpreco').value.trim()||el('#elqtd').value.trim())){toast('Adicione ou cancele o item em edição antes de concluir.');return}
+    r.fornecedor=el('#elfornecedor').value.trim();r.obs=el('#elobs').value.trim();if(!r.fornecedor){toast('Informe o fornecedor.');return}
+    r.enviado=true;salvar();busy=true;travar();
+    try{const x=await api('estoqueLancamento',r);busy=false;travar();resultado(x);}
+    catch(err){busy=false;travar();el('#elaviso').innerHTML='<div class="msg info">Não foi possível confirmar a resposta. Clique em Verificar lançamento para consultar com a mesma referência, sem repetir as entradas já enviadas.</div>';falha(err);}
+  };
+  salvar();render();if(selecionado&&!r.enviado){el('#elproduto').value=label(selecionado);el('#elproduto').oninput();el('#elpreco').focus();}
+  if(r.enviado){el('#elaviso').innerHTML='<div class="msg info">Este lançamento já foi enviado. Verifique o resultado antes de iniciar outro.</div>';}
+}
+async function verLancamentosEstoque(){
+  try{const l=await api('estoqueLancamentos');modal(`<header><h3>Lançamentos de estoque</h3><button data-fechar>×</button></header><div class="body">${l.map(x=>`<div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(x.fornecedor)}</b><span class="pill ${x.estado==='concluido'?'p-ok':'p-wait'}">${x.estado==='concluido'?'Concluído':'Conferir'}</span></div><p>${dth(x.data)} · ${esc(x.usuario)} · ${R$(x.total)}</p><div class="scroll"><table class="t"><thead><tr><th>Produto</th><th class="r">Quantidade</th><th class="r">Compra unitária</th><th>Situação</th></tr></thead><tbody>${x.itens.map(i=>`<tr><td>${esc(i.produto)}</td><td class="r">${Number(i.quantidade).toLocaleString('pt-BR')}</td><td class="r">${R$(i.precoCompra)}</td><td>${i.estado==='lancado'?'Lançado':i.estado==='pendente'?'Não enviado':'Conferir no Bling'}</td></tr>`).join('')}</tbody></table></div>${x.obs?`<p>${esc(x.obs)}</p>`:''}<div style="font-size:11px;color:var(--muted)">${esc(x.id)}</div></div>`).join('')||'<div class="empty"><b>Nenhum lançamento ainda</b></div>'}</div>`,{wide:true});}catch(e){falha(e)}
 }
 
 /* ===================== PAINEL ===================== */
@@ -716,17 +781,38 @@ async function vDashboard(){
 
 /* ---- pedidos ---- */
 let PEDS=[];
-async function vPedidos(){
-  M().innerHTML=`<div class="ph"><div><h1>Pedidos</h1><p>${ME.papel==='vendedor'?'Pedidos dos seus clientes':'Todos os pedidos do App'}</p></div><button class="btn" id="pn">${ICON.novo.replace('<svg','<svg width="18" height="18"')}Novo pedido</button></div>
-  <div class="toolbar"><input class="inp" id="pb" placeholder="Buscar cliente ou nº do pedido" aria-label="Buscar"><select class="inp" id="pf" style="flex:0 0 200px" aria-label="Situação"><option value="">Todas as situações</option>${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue','Cancelado'].map(s=>`<option>${s}</option>`).join('')}</select></div>
-  <div class="scroll" id="pt"><div class="empty"><b>Carregando…</b></div></div>`;
-  $('#pn').onclick=()=>{VIEW='novo';iniciarPainel()};
-  const render=()=>{const q=norm($('#pb').value),f=$('#pf').value;const l=PEDS.filter(p=>(!f||p.status===f)&&(!q||norm(p.cliente+' '+p.numero+' '+p.cidade).includes(q)));
-    $('#pt').innerHTML=l.length?`<table class="t"><thead><tr><th>Pedido</th><th>Data</th><th>Cliente</th><th>Cidade</th>${ME.papel!=='vendedor'?'<th>Vendedor</th>':''}<th>Situação</th><th class="r">Total</th></tr></thead><tbody>${l.map(p=>`<tr class="click" data-id="${p.id}"><td class="num"><b>#${p.numero}</b></td><td>${dth(p.data)}</td><td>${esc(p.cliente)}</td><td>${esc(p.cidade)}</td>${ME.papel!=='vendedor'?`<td>${esc(p.vendedor||'—')}</td>`:''}<td>${pillStatus(p.status)}${p.erroBling?' <span class="pill p-bad">Erro Bling</span>':''}</td><td class="r num">${R$(p.total)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum pedido</b>Os pedidos feitos pela loja e pelo painel aparecem aqui.</div>'};
-  $('#pb').oninput=render;$('#pf').onchange=render;
-  $('#pt').onclick=e=>{const tr=e.target.closest('tr[data-id]');if(tr)detalhePedido(PEDS.find(p=>p.id===tr.dataset.id),true,vPedidos)};
-  try{PEDS=await api('listarPedidos',{},true);render()}catch(e){$('#pt').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}
+/* Comprovantes térmicos: uma chamada de impressão para todos os selecionados. */
+function comprovantePedido(p){
+  return `<section class="pr-pedido"><div class="pr-pedido-top"><b>DAMIÃO PÃES</b><h1>Pedido ${esc(p.numero)}</h1><div>${dth(p.data)}</div><div>${esc(p.status||'')}</div></div>
+    <div class="pr-pedido-cliente"><b>${esc(p.cliente||'Cliente')}</b>${p.endereco?`<div>${esc(p.endereco)}</div>`:''}${p.cidade?`<div>${esc(p.cidade)}</div>`:''}${p.vendedor?`<div>Vendedor: ${esc(p.vendedor)}</div>`:''}${p.blingNumero?`<div>Bling: ${esc(p.blingNumero)}</div>`:''}</div>
+    <table><thead><tr><th>Produto</th><th class="r">Qtd.</th><th class="r">Total</th></tr></thead><tbody>${(p.itens||[]).map(i=>`<tr><td><b>${esc(i.nome)}</b><div class="pr-pedido-menor">${esc(i.codigo||'')} · ${R$(i.preco)}/${esc(i.unidade||'un')}</div></td><td class="r">${esc(i.qtd)}<br><small>${esc(i.unidade||'')}</small></td><td class="r">${R$(i.total)}</td></tr>`).join('')}</tbody></table>
+    ${p.frete?`<div class="pr-pedido-total"><span>Frete</span><span>${R$(p.frete)}</span></div>`:''}<div class="pr-pedido-total"><b>TOTAL</b><b>${R$(p.total)}</b></div>
+    ${p.obs?`<div class="pr-pedido-cliente"><b>Observações</b><div>${esc(p.obs)}</div></div>`:''}<div class="pr-pedido-fim">Separado por: ___________________<br><br>Conferido por: ___________________<p>Comprovante de pedido · Sem valor fiscal</p></div></section>`;
 }
+function imprimirPedidosSelecionados(pedidos){if(!pedidos.length){toast('Selecione pelo menos um pedido.');return}imprimir(pedidos.map(comprovantePedido).join(''),'size:auto;margin:0');}
+function imprimirPedido(p){imprimirPedidosSelecionados([p]);}
+async function vPedidos(){
+  const STATUS_PED=['Recebido','Em separação','Enviado ao Bling','Faturado','Em rota','Entregue','Cancelado'];
+  M().innerHTML=`<div class="ph"><div><h1>Pedidos</h1><p>${ME.papel==='vendedor'?'Pedidos dos seus clientes':'Todos os pedidos do App'}</p></div><button class="btn" id="pn">${ICON.novo.replace('<svg','<svg width="18" height="18"')}Novo pedido</button></div>
+    <div class="toolbar"><input class="inp" id="pb" placeholder="Buscar cliente, pedido ou cidade" aria-label="Buscar pedidos"><select class="inp" id="pf" style="flex:0 0 220px" aria-label="Situação do pedido"><option value="">Todas as situações</option>${STATUS_PED.map(s=>`<option>${esc(s)}</option>`).join('')}</select></div>
+    <div class="sel-bar"><b id="pselnumero">Nenhum pedido selecionado</b><button class="btn" id="pimprimir" disabled>Imprimir na Elgin i9</button><button class="btn o" id="plimpar" disabled>Limpar seleção</button><span style="font-size:12px">Papel 80 mm · escolha Elgin i9 na impressão</span></div>
+    <div class="scroll" id="pt"><div class="empty"><b>Carregando…</b></div></div>`;
+  const selecionados=new Set();let visiveis=[];
+  const atualizarSelecao=()=>{const n=selecionados.size;$('#pselnumero').textContent=n?n+' pedido'+(n===1?' selecionado':'s selecionados'):'Nenhum pedido selecionado';$('#pimprimir').disabled=!n;$('#plimpar').disabled=!n;const all=$('#pall');if(all){all.checked=visiveis.length>0&&visiveis.every(p=>selecionados.has(String(p.id)));all.indeterminate=visiveis.some(p=>selecionados.has(String(p.id)))&&!all.checked;}};
+  const render=()=>{
+    const q=norm($('#pb').value),f=$('#pf').value;
+    visiveis=PEDS.filter(p=>(!f||p.status===f)&&(!q||norm(p.cliente+' '+p.numero+' '+p.cidade).includes(q)));
+    $('#pt').innerHTML=visiveis.length?`<table class="t"><thead><tr><th><input type="checkbox" class="chk" id="pall" aria-label="Selecionar todos os pedidos exibidos"></th><th>Pedido</th><th>Data</th><th>Cliente</th><th>Cidade</th>${ME.papel!=='vendedor'?'<th>Vendedor</th>':''}<th>Situação</th><th class="r">Total</th><th>Ações</th></tr></thead><tbody>${visiveis.map(p=>`<tr class="click" data-id="${esc(p.id)}"><td><input type="checkbox" class="chk" data-pedido="${esc(p.id)}" aria-label="Selecionar pedido ${esc(p.numero)}" ${selecionados.has(String(p.id))?'checked':''}></td><td class="num"><b>#${esc(p.numero)}</b></td><td>${dth(p.data)}</td><td>${esc(p.cliente)}</td><td>${esc(p.cidade)}</td>${ME.papel!=='vendedor'?`<td>${esc(p.vendedor||'—')}</td>`:''}<td>${pillStatus(p.status)}${p.erroBling?' <span class="pill p-bad">Erro Bling</span>':''}</td><td class="r num">${R$(p.total)}</td><td><button class="btn o sm" data-ver="${esc(p.id)}">Ver</button>${GOP()&&PED_EDITAVEL.includes(p.status)?` <button class="btn o sm" data-editar-pedido="${esc(p.id)}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum pedido encontrado</b>Mude a busca ou a situação.</div>';
+    atualizarSelecao();
+  };
+  $('#pn').onclick=()=>{VIEW='novo';iniciarPainel();};$('#pb').oninput=render;$('#pf').onchange=render;
+  $('#plimpar').onclick=()=>{selecionados.clear();render();};
+  $('#pimprimir').onclick=()=>imprimirPedidosSelecionados(PEDS.filter(p=>selecionados.has(String(p.id))));
+  $('#pt').onchange=e=>{if(e.target.id==='pall'){visiveis.forEach(p=>e.target.checked?selecionados.add(String(p.id)):selecionados.delete(String(p.id)));render();}else if(e.target.dataset.pedido){e.target.checked?selecionados.add(e.target.dataset.pedido):selecionados.delete(e.target.dataset.pedido);atualizarSelecao();}};
+  $('#pt').onclick=e=>{if(e.target.closest('input'))return;const ed=e.target.closest('[data-editar-pedido]'),tr=e.target.closest('tr[data-id]');if(!tr)return;const p=PEDS.find(p=>String(p.id)===tr.dataset.id);if(ed)editarPedido(p,vPedidos);else detalhePedido(p,true,vPedidos);};
+  try{PEDS=await api('listarPedidos',{},true);render();}catch(e){$('#pt').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`;}
+}
+
 
 /* ---- novo pedido (equipe) ---- */
 async function vNovo(){
