@@ -1,0 +1,67 @@
+$ErrorActionPreference = 'Continue'
+Write-Host ''
+Write-Host '=========================================================='
+Write-Host '  PDV DAMIAO - atalho do caixa e impressora Elgin i9'
+Write-Host '=========================================================='
+Write-Host ''
+Write-Host 'ANTES DE CONTINUAR: no PDV, confira em "Ultimas vendas" que nao ha'
+Write-Host 'nenhuma venda "na fila" ou "com erro". O Chrome sera FECHADO.'
+Write-Host ''
+Read-Host 'Aperte ENTER para continuar (ou feche esta janela para cancelar)' | Out-Null
+
+Write-Host '1/5 Procurando o Google Chrome...'
+$cands = @(
+  (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+  (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+  (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')
+)
+$chrome = $cands | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $chrome) { Write-Host 'ERRO: Google Chrome nao encontrado. Instale o Chrome e rode de novo.' -ForegroundColor Red; return }
+Write-Host ('   Chrome: ' + $chrome)
+
+Write-Host '2/5 Procurando a impressora Elgin...'
+$imp = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match 'elgin|i9' } | Select-Object -First 1
+if ($imp) {
+  Set-ItemProperty 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows' -Name LegacyDefaultPrinterMode -Value 1 -Type DWord
+  Invoke-CimMethod -InputObject $imp -MethodName SetDefaultPrinter | Out-Null
+  Write-Host ('   Impressora padrao agora: ' + $imp.Name) -ForegroundColor Green
+} else {
+  Write-Host '   ATENCAO: nenhuma impressora Elgin/i9 instalada no Windows.' -ForegroundColor Yellow
+  Write-Host '   Impressoras encontradas:'
+  Get-CimInstance Win32_Printer | ForEach-Object { Write-Host ('     - ' + $_.Name) }
+  Write-Host '   Instale o driver da Elgin i9 e rode este arquivo de novo.' -ForegroundColor Yellow
+}
+
+Write-Host '3/5 Chrome passa a imprimir na impressora padrao do Windows...'
+New-Item 'HKCU:\Software\Policies\Google\Chrome' -Force | Out-Null
+Set-ItemProperty 'HKCU:\Software\Policies\Google\Chrome' -Name PrintPreviewUseSystemDefaultPrinter -Value 1 -Type DWord
+
+Write-Host '4/5 Fechando o Chrome...'
+Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2
+
+Write-Host '5/5 Criando o atalho "PDV Damiao" na area de trabalho...'
+$base = Join-Path $env:LOCALAPPDATA 'PDVDamiao'
+$perfil = Join-Path $base 'Chrome'
+New-Item $perfil -ItemType Directory -Force | Out-Null
+$ico = Join-Path $base 'pdv.ico'
+try {
+  $png = Join-Path $base 'pdv.png'
+  Invoke-WebRequest 'https://paesdamiao.com.br/pdv/icon-192.png' -OutFile $png -UseBasicParsing
+  Add-Type -AssemblyName System.Drawing
+  $bmp = New-Object System.Drawing.Bitmap ([System.Drawing.Image]::FromFile($png)), 64, 64
+  $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+  $fs = [IO.File]::Create($ico); $icon.Save($fs); $fs.Close()
+} catch { $ico = $chrome }
+$ws = New-Object -ComObject WScript.Shell
+$desk = [Environment]::GetFolderPath('Desktop')
+$lnk = $ws.CreateShortcut((Join-Path $desk 'PDV Damiao.lnk'))
+$lnk.TargetPath = $chrome
+$lnk.Arguments = '--user-data-dir="' + $perfil + '" --app=https://paesdamiao.com.br/pdv/ --kiosk-printing --no-first-run'
+$lnk.IconLocation = $ico
+$lnk.Description = 'PDV Damiao - imprime direto na impressora padrao'
+$lnk.Save()
+
+Write-Host ''
+Write-Host 'PRONTO! Abra o PDV pelo atalho "PDV Damiao" da area de trabalho.' -ForegroundColor Green
+Write-Host 'Na primeira vez, entre com seu usuario e confira Configuracoes do PDV.'
