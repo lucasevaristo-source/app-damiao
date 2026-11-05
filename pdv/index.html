@@ -506,6 +506,18 @@ table.list{width:100%;border-collapse:collapse}
   <header><span id="pkTitle">Cliente</span><button data-close aria-label="Fechar">×</button></header>
   <div class="body"><input class="search" id="pkSearch" placeholder="Buscar" autocomplete="off" aria-label="Buscar"><div class="pick" id="pkList" role="listbox"></div></div>
 </div></div>
+<div id="mNovoCli" class="modal" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="ncTitle">
+  <header><span id="ncTitle">Cadastrar cliente</span><button data-close aria-label="Fechar">×</button></header>
+  <div class="body">
+    <div class="fld"><label for="ncNome">Nome / Razão social *</label><input id="ncNome" autocomplete="off"></div>
+    <div class="fld"><label for="ncDoc">CPF ou CNPJ</label><input id="ncDoc" inputmode="numeric" autocomplete="off"></div>
+    <div class="fld"><label for="ncTel">Celular / WhatsApp</label><input id="ncTel" inputmode="tel" autocomplete="off"></div>
+    <div class="fld"><label for="ncEmail">E-mail</label><input id="ncEmail" inputmode="email" autocomplete="off"></div>
+    <div class="fld"><label for="ncCidade">Cidade</label><input id="ncCidade" value="Tatuí" autocomplete="off"></div>
+    <div class="hint" id="ncMsg">O cliente é criado no Bling na hora (precisa de internet). Se o CPF/CNPJ já existir no Bling, o cadastro existente é usado.</div>
+  </div>
+  <footer><button data-close style="color:var(--blue-ink)">Cancelar</button><button id="ncOk" style="background:var(--blue);color:#fff">Cadastrar e usar na venda</button></footer>
+</div></div>
 <div id="mEdit" class="modal" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="edTitle">
   <header><span id="edTitle">Editar item</span><button data-close aria-label="Fechar">×</button></header>
   <div class="body">
@@ -768,7 +780,7 @@ $('#btnLimpar').onclick=()=>{if(!cart.itens.length)return;confirmar('Limpar todo
 let pk={list:[],sel:0,view:[],onPick:null,label:null};
 function openPicker(title,list,label,onPick){pk={list,sel:0,view:[],onPick,label};$('#pkTitle').textContent=title;$('#pkSearch').value='';renderPick();openModal('#mPick');$('#pkSearch').focus()}
 function renderPick(){const ws=norm($('#pkSearch').value).split(/\s+/).filter(Boolean);
-  pk.view=pk.list.filter(x=>{const h=norm(pk.label(x).join(' '));return ws.every(w=>h.includes(w))}).slice(0,80);
+  pk.view=pk.list.filter(x=>{if(x&&x.__novo)return true;const h=norm(pk.label(x).join(' '));return ws.every(w=>h.includes(w))}).slice(0,80);
   pk.sel=Math.min(pk.sel,Math.max(0,pk.view.length-1));
   $('#pkList').innerHTML=pk.view.map((x,i)=>{const [a,b]=pk.label(x);return`<button role="option" data-i="${i}" aria-selected="${i===pk.sel}">${esc(a)}${b?`<small>${esc(b)}</small>`:''}</button>`}).join('')||'<div class="hint" style="padding:10px">Nada encontrado</div>';
   const s=$('#pkList [aria-selected="true"]');if(s)s.scrollIntoView({block:'nearest'})}
@@ -776,15 +788,37 @@ $('#pkSearch').oninput=()=>{pk.sel=0;renderPick()};
 $('#pkSearch').addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();pk.sel++;renderPick()}else if(e.key==='ArrowUp'){e.preventDefault();pk.sel=Math.max(0,pk.sel-1);renderPick()}else if(e.key==='Enter'){e.preventDefault();if(pk.view.length){closeModals();pk.onPick(pk.view[pk.sel])}}});
 $('#pkList').addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)return;closeModals();pk.onPick(pk.view[+b.dataset.i])});
 function pickCliente(){
-  openPicker('Cliente (F8)',[null,...CAT.clientes],c=>c?[c.fantasia||c.nome,[c.fantasia&&c.fantasia!==c.nome?c.nome:'',c.documento,c.cidade].filter(Boolean).join(' · ')]:['Consumidor final - padrão',''],c=>{
+  openPicker('Cliente (F8)',[NOVO_CLI,null,...CAT.clientes],c=>c===NOVO_CLI?['+ Cadastrar novo cliente','Não achou? Cadastre na hora (vai para o Bling)']:c?[c.fantasia||c.nome,[c.fantasia&&c.fantasia!==c.nome?c.nome:'',c.documento,c.cidade].filter(Boolean).join(' · ')]:['Consumidor final - padrão',''],c=>{
+    if(c===NOVO_CLI){abrirNovoCliente($('#pkSearch').value);return}
+    usarCliente(c)});
+}
+function usarCliente(c){{
     cart.cliente=c;cart.itens.forEach(i=>{const p=CAT.produtos.find(x=>x.id===i.produtoId);if(p)i.preco=precoDe(p)});cart.pagamentos=[];
     if(c&&c.documento&&!cart.cpf)syncCpf(c.documento);
-    renderNames();renderProds();renderCart();if(screen==='pagamento'){renderPay();$('#valor').focus()}else focusScan()});
+    renderNames();renderProds();renderCart();if(screen==='pagamento'){renderPay();$('#valor').focus()}else focusScan()}
 }
 function pickVendedor(){
   if(!CAT.vendedores.length){go('ajustes');toast('Nenhum vendedor veio do Bling. Preencha o operador aqui.');setTimeout(()=>$('#cfOper').focus(),50);return}
   openPicker('Vendedor (F9)',CAT.vendedores,v=>[v.nome,''],async v=>{CFG.vendedorId=v.id;CFG.operador=v.nome;await saveCfg();renderNames();focusScan()});
 }
+
+/* cadastro rápido de cliente na venda (vai direto para o Bling) */
+const NOVO_CLI={__novo:true};
+function abrirNovoCliente(pre){
+  ['#ncNome','#ncDoc','#ncTel','#ncEmail'].forEach(s=>$(s).value='');$('#ncCidade').value='Tatuí';
+  const t=String(pre||'').trim();if(/^[\d.\-\/ ]{11,18}$/.test(t))$('#ncDoc').value=t;else $('#ncNome').value=t;
+  $('#ncMsg').textContent='O cliente é criado no Bling na hora (precisa de internet). Se o CPF/CNPJ já existir no Bling, o cadastro existente é usado.';
+  openModal('#mNovoCli');$(t&&$('#ncDoc').value?'#ncNome':'#ncNome').focus();
+}
+$('#ncOk').onclick=async()=>{const b=$('#ncOk');if(b.disabled)return;
+  if(!navigator.onLine){$('#ncMsg').textContent='Sem internet: não dá para cadastrar agora. Venda como Consumidor final ou tente de novo quando voltar a conexão.';return}
+  b.disabled=true;$('#ncMsg').textContent='Cadastrando no Bling…';
+  try{const r=await PdvCaixa.novoCliente({nome:$('#ncNome').value,documento:$('#ncDoc').value,telefone:$('#ncTel').value,email:$('#ncEmail').value,cidade:$('#ncCidade').value});
+    const c={id:String(r.cliente.id),nome:r.cliente.nome,fantasia:r.cliente.fantasia||'',documento:r.cliente.documento||'',cidade:r.cliente.cidade||'',listaId:null};
+    await DB.put('clientes',c);await loadCat();closeModals();usarCliente(CAT.clientes.find(x=>x.id===c.id)||c);
+    toast(r.existente?'Cliente já existia no Bling e foi selecionado':'Cliente cadastrado no Bling e selecionado');
+  }catch(e){$('#ncMsg').textContent=e.message||String(e)}finally{b.disabled=false}};
+$('#mNovoCli').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();$('#ncOk').click()}});
 $('#tbCli').onclick=pickCliente;$('#tbVend').onclick=pickVendedor;
 
 /* ================= pagamento ================= */

@@ -111,5 +111,5 @@ const PdvCaixa=(()=>{
     printHTML(relatorioHTML(c));
   }
   async function imprimirAtual(){try{await atualizar();const c=estado.aberto||estado.ultimo;if(!c)throw Error('Nenhum caixa registrado.');imprimir(c);}catch(e){toast(e.message);}}
-  return {ponte:PONTE,alterarVenda:d=>api('pdvAlterarVenda',d),iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
+  return {ponte:PONTE,novoCliente:d=>api('pdvNovoCliente',d),alterarVenda:d=>api('pdvAlterarVenda',d),iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
 })();
