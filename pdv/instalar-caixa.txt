@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Continue'
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) {
   Write-Host 'Pedindo permissao de administrador (clique em SIM na janela do Windows)...' -ForegroundColor Yellow
-  Start-Process powershell -Verb RunAs -ArgumentList '-NoExit -ExecutionPolicy Bypass -Command "irm https://paesdamiao.com.br/pdv/instalar-caixa.txt | iex"'
+  Start-Process powershell -Verb RunAs -ArgumentList '-NoExit -ExecutionPolicy Bypass -Command "irm https://paesdamiao.com.br/pdv/instalar-caixa.txt?v=3 | iex"'
   return
 }
 Write-Host ''
