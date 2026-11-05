@@ -1,4 +1,10 @@
 $ErrorActionPreference = 'Continue'
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $admin) {
+  Write-Host 'Pedindo permissao de administrador (clique em SIM na janela do Windows)...' -ForegroundColor Yellow
+  Start-Process powershell -Verb RunAs -ArgumentList '-NoExit -ExecutionPolicy Bypass -Command "irm https://paesdamiao.com.br/pdv/instalar-caixa.txt | iex"'
+  return
+}
 Write-Host ''
 Write-Host '=========================================================='
 Write-Host '  PDV DAMIAO - atalho do caixa e impressora Elgin i9'
@@ -19,17 +25,27 @@ $chrome = $cands | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Firs
 if (-not $chrome) { Write-Host 'ERRO: Google Chrome nao encontrado. Instale o Chrome e rode de novo.' -ForegroundColor Red; return }
 Write-Host ('   Chrome: ' + $chrome)
 
-Write-Host '2/5 Procurando a impressora Elgin...'
-$imp = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match 'elgin|i9' } | Select-Object -First 1
+Write-Host '2/5 Reiniciando o servico de impressao do Windows e procurando a Elgin...'
+try {
+  Stop-Service Spooler -Force -ErrorAction Stop
+  Get-ChildItem "$env:SystemRoot\System32\spool\PRINTERS" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+  Start-Service Spooler -ErrorAction Stop
+  Start-Sleep -Seconds 3
+  Write-Host '   Servico de impressao reiniciado (fila de impressao limpa).' -ForegroundColor Green
+} catch { Write-Host ('   Nao consegui reiniciar o servico de impressao: ' + $_.Exception.Message) -ForegroundColor Yellow }
+$nomes = @()
+try { $nomes = @(Get-Printer -ErrorAction Stop | Select-Object -ExpandProperty Name) } catch {}
+if (-not $nomes.Count) { try { $nomes = @((Get-Item 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Devices' -ErrorAction Stop).Property) } catch {} }
+Write-Host '   Impressoras encontradas:'
+$nomes | ForEach-Object { Write-Host ('     - ' + $_) }
+$imp = $nomes | Where-Object { $_ -match 'elgin|i9' } | Select-Object -First 1
 if ($imp) {
   Set-ItemProperty 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows' -Name LegacyDefaultPrinterMode -Value 1 -Type DWord
-  Invoke-CimMethod -InputObject $imp -MethodName SetDefaultPrinter | Out-Null
-  Write-Host ('   Impressora padrao agora: ' + $imp.Name) -ForegroundColor Green
+  try { (New-Object -ComObject WScript.Network).SetDefaultPrinter($imp); Write-Host ('   Impressora padrao agora: ' + $imp) -ForegroundColor Green }
+  catch { Write-Host ('   Nao consegui definir a padrao: ' + $_.Exception.Message) -ForegroundColor Yellow }
 } else {
-  Write-Host '   ATENCAO: nenhuma impressora Elgin/i9 instalada no Windows.' -ForegroundColor Yellow
-  Write-Host '   Impressoras encontradas:'
-  Get-CimInstance Win32_Printer | ForEach-Object { Write-Host ('     - ' + $_.Name) }
-  Write-Host '   Instale o driver da Elgin i9 e rode este arquivo de novo.' -ForegroundColor Yellow
+  Write-Host '   ATENCAO: nenhuma impressora com Elgin ou i9 no nome.' -ForegroundColor Yellow
+  Write-Host '   Se a Elgin aparece na lista com outro nome, avise o Claude com o nome dela.' -ForegroundColor Yellow
 }
 
 Write-Host '3/5 Chrome passa a imprimir na impressora padrao do Windows...'
