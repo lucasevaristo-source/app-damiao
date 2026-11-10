@@ -772,10 +772,20 @@ const M=()=>$('#main');
 /* ---- dashboard ---- */
 let charts=[];
 async function vDashboard(){
-  M().innerHTML=`<div class="ph"><div><h1>Olá, ${esc(ME.nome.split(' ')[0])}!</h1><p id="dscope">Carregando números…</p></div><button class="btn o sm" id="dref">Atualizar</button></div><div id="dbody"></div>`;
+  const atalhos=[['novo','Registrar nova venda'],['clientes','Clientes'],['produtos','Produtos']];
+  M().innerHTML=`<div class="ph"><div><h1>Olá, ${esc(ME.nome.split(' ')[0])}!</h1><p id="dscope">Carregando números…</p></div><button class="btn o sm" id="dref">Atualizar</button></div>
+    <div class="card" style="margin-bottom:12px"><h3>Acesso rápido</h3><div style="display:flex;flex-wrap:wrap;gap:8px">${atalhos.map(([view,label])=>`<button type="button" class="btn o sm" data-dashboard-view="${view}">${label}</button>`).join('')}</div></div><div id="dbody"></div>`;
+  const body=$('#dbody');
+  M().querySelectorAll('[data-dashboard-view]').forEach(button=>{
+    const destino=button.dataset.dashboardView;
+    const entrada=[...document.querySelectorAll('[data-v]')].find(item=>item.dataset.v===destino);
+    button.hidden=!entrada;
+    if(entrada)button.onclick=()=>entrada.click();
+  });
   $('#dref').onclick=vDashboard;
   try{
     const d=await api('dashboard');
+    if(!body.isConnected)return;
     $('#dscope').textContent=d.escopo+' · '+d.clientes+' clientes · pedidos do App';
     const mesNome=new Date(d.mesRef+'-15').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
     $('#dbody').innerHTML=`<div class="kpis">
@@ -801,7 +811,7 @@ async function vDashboard(){
     charts.push(new Chart($('#c1'),{type:'bar',data:{labels:dias,datasets:[{data:dias.map(x=>map[d.mesRef+'-'+x]||0),backgroundColor:'#2563eb',borderRadius:4}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
     charts.push(new Chart($('#c2'),{type:'bar',data:{labels:d.ranking.map(r=>r.nome),datasets:[{label:'Semana',data:d.ranking.map(r=>r.semana),backgroundColor:'#f5d23e',borderRadius:4},{label:'Mês',data:d.ranking.map(r=>r.mes),backgroundColor:'#2563eb',borderRadius:4}]},options:{maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
     charts.push(new Chart($('#c3'),{type:'line',data:{labels:d.semanas.map(s=>s.slice(8)+'/'+s.slice(5,7)),datasets:d.series.map((s,i)=>({label:s.nome,data:s.valores,borderColor:cor[i%cor.length],backgroundColor:cor[i%cor.length],tension:.3,pointRadius:3}))},options:{maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
-  }catch(e){$('#dbody').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}
+  }catch(e){if(body.isConnected)body.innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}
 }
 
 /* ---- pedidos ---- */
@@ -888,7 +898,20 @@ async function vNovo(pedido=null,onChange=null){
     el('#npsugestoes').innerHTML=sugestoes.length?sugestoes.map((p,n)=>`<button type="button" data-npp="${n}" class="np-sugestao ${n===ativo?'ativo':''}"><span><b>${esc(p.nome)}</b><small>${esc(p.codigo||'')} · Saldo ${p.estoque==null?'—':fmt(p.estoque)} ${esc(p.unidade||'')}</small></span><strong>${R$(p.preco)}</strong></button>`).join(''):'<div class="np-sem-resultado">Nenhum produto encontrado.</div>';
     el('#npsugestoes').hidden=false;el('#npproduto').setAttribute('aria-expanded','true');
   }
-  function buscarCliente(){const q=norm(el('#npcliente').value);const l=clientes.filter(c=>norm([c.nome,c.fantasia,c.documento,c.cidade].join(' ')).includes(q)).slice(0,20);el('#npclientes').innerHTML=l.map(c=>`<button type="button" class="np-sugestao" data-npcli="${esc(c.id)}"><span><b>${esc(c.fantasia||c.nome)}</b><small>${esc(c.documento||'')} · ${esc(c.cidade||'')}</small></span></button>`).join('')||'<div class="np-sem-resultado">Nenhum cliente aprovado encontrado.</div>';el('#npclientes').hidden=false;el('#npcliente').setAttribute('aria-expanded','true');}
+  let limiteClientes=20;
+  function buscarCliente(){
+    const termos=norm(el('#npcliente').value).split(/\s+/).filter(Boolean);
+    const resultados=clientes.filter(c=>{
+      const dados=norm([c.nome,c.fantasia,c.documento,c.cidade,c.uf].join(' '));
+      const documento=String(c.documento||'').replace(/\D/g,'');
+      return termos.every(termo=>dados.includes(termo)||(/^\d+$/.test(termo)&&documento.includes(termo)));
+    });
+    const lista=el('#npclientes');
+    lista.innerHTML=resultados.slice(0,limiteClientes).map(c=>`<button type="button" class="np-sugestao" data-npcli="${esc(c.id)}"><span><b>${esc(c.fantasia||c.nome)}</b><small>${esc(c.documento||'')} · ${esc(c.cidade||'')}</small></span></button>`).join('')||'<div class="np-sem-resultado">Nenhum cliente aprovado encontrado.</div>';
+    if(resultados.length>limiteClientes)lista.insertAdjacentHTML('beforeend',`<button type="button" class="btn o sm" data-npmais>Carregar mais (${limiteClientes} de ${resultados.length})</button>`);
+    lista.hidden=false;
+    el('#npcliente').setAttribute('aria-expanded','true');
+  }
   async function escolherCliente(c,restaurar=false){
     const g=++geracao;cliente=c;cat=null;selecionado=null;buscando=true;draft.clienteId=String(c.id);if(!restaurar){draft.itens=[];draft.formaPagamentoId='';draft.enviado=false;}gravar();
     el('#npclientearea').innerHTML=`<div class="np-cliente-selecionado"><span class="np-avatar">${esc((c.fantasia||c.nome).trim().slice(0,1).toUpperCase())}</span><div><b>${esc(c.fantasia||c.nome)}</b><small>${esc(c.documento||'')} · ${esc(c.cidade||'')}${c.uf?'/'+esc(c.uf):''}</small><small>${esc([c.endereco,c.numero,c.bairro].filter(Boolean).join(', '))}</small></div><button class="btn o sm" id="nptrocar">Trocar cliente</button></div>`;
@@ -903,9 +926,27 @@ async function vNovo(pedido=null,onChange=null){
       el('#npaviso').innerHTML=draft.enviado?'<div class="msg info">A solicitação já foi enviada. Clique em Verificar para confirmar o resultado sem repetir o pedido.</div>':'';buscando=false;gravar();itens();if(!draft.enviado)el('#npproduto').focus();
     }catch(e){buscando=false;el('#npitens').innerHTML=`<div class="empty"><b>Não foi possível carregar os produtos</b>${esc(e.message)}<p><button class="btn o" id="nprecarregar">Tentar novamente</button></p></div>`;el('#nprecarregar').onclick=()=>escolherCliente(c,true);controles();}
   }
-  el('#npcliente').oninput=buscarCliente;el('#npcliente').onfocus=buscarCliente;
-  el('#npcliente').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const b=el('#npclientes button');if(b){const c=clientes.find(c=>String(c.id)===b.dataset.npcli);if(c)escolherCliente(c);}}else if(e.key==='Escape')el('#npclientes').hidden=true;};
-  el('#npclientes').onclick=e=>{const b=e.target.closest('[data-npcli]');if(b)escolherCliente(clientes.find(c=>String(c.id)===b.dataset.npcli));};
+  el('#npcliente').oninput=()=>{limiteClientes=20;buscarCliente();};
+  el('#npcliente').onfocus=buscarCliente;
+  el('#npcliente').onkeydown=e=>{
+    if(e.key==='Enter'&&!el('#npclientes').hidden){
+      e.preventDefault();
+      el('#npclientes [data-npcli]')?.click();
+    }else if(e.key==='Escape'){
+      el('#npclientes').hidden=true;
+      e.target.setAttribute('aria-expanded','false');
+    }
+  };
+  el('#npclientes').onclick=e=>{
+    if(e.target.closest('[data-npmais]')){
+      limiteClientes+=20;
+      buscarCliente();
+      el('#npclientes [data-npmais]')?.focus();
+      return;
+    }
+    const botao=e.target.closest('[data-npcli]');
+    if(botao)escolherCliente(clientes.find(c=>String(c.id)===botao.dataset.npcli));
+  };
   el('#npproduto').oninput=buscarProduto;el('#npproduto').onfocus=()=>{if(cat&&!selecionado)buscarProduto();};el('#npsaldo').onchange=()=>{if(cat&&!selecionado)buscarProduto();};
   el('#npproduto').onkeydown=e=>{
     if(e.key==='Escape'){el('#npsugestoes').hidden=true;return}
@@ -989,18 +1030,28 @@ function editarCliente(c){
   const f=(id,l,v,t='text')=>`<div class="field"><label for="${id}">${l}</label><input id="${id}" type="${t}" value="${esc(v||'')}"></div>`;
   const m=modal(`<header><h3>${n?'Novo cliente':esc(c.fantasia||c.nome)}</h3><button data-fechar>×</button></header><div class="body">
    ${c.status==='pendente'?'<div class="msg info">Cadastro feito pela loja, aguardando aprovação. Confira os dados, escolha vendedor, <b>tabela de preço</b> e <b>frete</b> e clique em Aprovar.</div>':''}${g?'<div style="font-size:12.5px;color:var(--muted)">* Para liberar o acesso do cliente à loja, a tabela de preço e o frete são obrigatórios.</div>':''}
+   <section><h4>Dados do cliente</h4><div class="field"><label for="e3">Tipo de pessoa</label><select id="e3"><option ${c.tipo==='PJ'?'selected':''} value="PJ">Pessoa Jurídica</option><option ${c.tipo==='PF'?'selected':''} value="PF">Pessoa Física</option></select></div>
    <div class="grid2">${f('e1','Razão social / Nome',c.nome)}${f('e2','Nome fantasia',c.fantasia)}
-    <div class="field"><label for="e3">Tipo</label><select id="e3"><option ${c.tipo==='PJ'?'selected':''} value="PJ">Pessoa Jurídica</option><option ${c.tipo==='PF'?'selected':''} value="PF">Pessoa Física</option></select></div>
-    ${f('e4','CNPJ / CPF',c.documento)}${f('e5','E-mail',c.email,'email')}${f('e6','WhatsApp',c.telefone)}${f('e7','CEP',c.cep)}${f('e8','Endereço',c.endereco)}${f('e9','Número',c.numero)}${f('e10','Bairro',c.bairro)}${f('e11','Cidade',c.cidade)}${f('e12','UF',c.uf)}
+    ${f('e4','CNPJ / CPF',c.documento)}${f('e5','E-mail de contato',c.email,'email')}${f('e6','WhatsApp',c.telefone)}</div>
+   <div class="field"><label for="e16">Observações internas</label><textarea id="e16">${esc(c.obs||'')}</textarea></div></section>
+   <section><h4>Endereço de entrega</h4><div class="grid2">${f('e7','CEP',c.cep)}${f('e8','Endereço',c.endereco)}${f('e9','Número',c.numero)}${f('e10','Bairro',c.bairro)}${f('e11','Cidade',c.cidade)}${f('e12','UF',c.uf)}</div></section>
+   ${gv?'<h4>Vínculos comerciais e acesso</h4>':''}<div class="grid2">
     ${gv?`<div class="field"><label for="e13">Vendedor</label><select id="e13"><option value="">— Sem vendedor —</option>${vend.map(v=>`<option value="${v.id}" ${v.id===c.vendedorId?'selected':''}>${esc(v.nome)}</option>`).join('')}</select></div>
     <div class="field"><label for="e14">Tabela de preço *</label><select id="e14"><option value="" ${!c.tabelaId?'selected':''}>— Escolha a tabela —</option>${(TABS||[]).map(t=>`<option value="${t.id}" ${t.id===c.tabelaId?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
     ${g?`<div class="field"><label for="e15">Situação</label><select id="e15">${[['aprovado','Aprovado'],['pendente','Aguardando aprovação'],['bloqueado','Bloqueado']].map(([k,l])=>`<option value="${k}" ${k===c.status?'selected':''}>${l}</option>`).join('')}</select></div>`:''}`:''}
    </div>${g?`<div class="grid2"><div class="field"><label for="e18">Frete (R$) *</label><input id="e18" inputmode="decimal" placeholder="Ex.: 10,00 · use 0 se não paga frete" value="${esc(c.freteValor||'')}"></div><div class="field"><label for="e19">Entrega grátis a partir de (R$)</label><input id="e19" inputmode="decimal" placeholder="Ex.: 150,00 (vazio = frete sempre)" value="${esc(c.freteGratisAcima||'')}"></div></div>`:''}${g?`<div class="field"><label>Formas de pagamento liberadas na loja</label><div id="efp" style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--muted)">Carregando…</div><div style="font-size:12.5px;color:var(--muted)">Só o Master e o Administrador liberam. Sem nenhuma marcada, o cliente vê as formas padrão de Configurações.</div></div>`:''}
    ${g&&!n&&c.temAcesso?`<div class="field"><label for="e17">Senha de acesso ao App</label><div style="display:flex;gap:8px"><input id="e17" type="text" autocomplete="off" placeholder="Nova senha (mínimo 6 caracteres)" style="flex:1"><button type="button" class="btn o sm" id="esen">Alterar senha</button></div><div style="font-size:12.5px;color:var(--muted)">Só o Master e o Administrador alteram. Passe a nova senha ao cliente.</div></div>`:''}
-   <div class="field"><label for="e16">Observações internas</label><textarea id="e16">${esc(c.obs||'')}</textarea></div>
    ${!n?`<div style="font-size:13px;color:var(--muted)">${c.blingId?'Ligado ao Bling (contato '+esc(c.blingId)+')':'Ainda não está no Bling: é criado no primeiro pedido.'} · ${c.temAcesso?(c.acessoAtivo?'Tem acesso à loja':'Acesso à loja bloqueado'):'Sem acesso à loja'}</div>`:''}
   </div><footer>${!n&&g&&!c.temAcesso?'<button class="btn o" id="eacc">Criar acesso à loja</button>':''}${c.status==='pendente'&&g?'<button class="btn g" id="eapr">Aprovar</button>':''}<button class="btn" id="esv">Salvar</button></footer>`,{wide:true});
   const v=id=>{const e=m.querySelector('#'+id);return e?e.value:undefined};
+  const tipo=m.querySelector('#e3');
+  const rotular=()=>{
+    const pessoaFisica=tipo.value==='PF';
+    m.querySelector('label[for="e1"]').textContent=pessoaFisica?'Nome':'Razão social';
+    m.querySelector('label[for="e4"]').textContent=pessoaFisica?'CPF':'CNPJ';
+  };
+  tipo.onchange=rotular;
+  rotular();
   const efp=m.querySelector('#efp');
   if(efp)api('formasPagamento',{},true).then(fs=>{const sel=String(c.formasPagamento||'').split(',').filter(String);efp.style.color='';efp.innerHTML=fs.map(x=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-cfp value="${esc(x.id)}" ${sel.includes(String(x.id))?'checked':''}>${esc(x.nome)}</label>`).join('')||'Nenhuma forma de pagamento no Bling.'}).catch(()=>{efp.textContent='Não foi possível carregar as formas de pagamento.'});
   const dados=()=>({id:c.id,nome:v('e1'),fantasia:v('e2'),tipo:v('e3'),documento:v('e4'),email:v('e5'),telefone:v('e6'),cep:v('e7'),endereco:v('e8'),numero:v('e9'),bairro:v('e10'),cidade:v('e11'),uf:v('e12'),vendedorId:v('e13'),tabelaId:v('e14'),status:v('e15'),obs:v('e16'),freteValor:v('e18'),freteGratisAcima:v('e19'),formasPagamento:efp&&efp.querySelector('[data-cfp]')?[...efp.querySelectorAll('[data-cfp]:checked')].map(e=>e.value).join(','):undefined});
@@ -1023,12 +1074,19 @@ async function vProdutos(){
   if(g){
     $('#pat').onclick=async()=>{try{const n=await api('atualizarCatalogoAgora');toast(n+' produtos atualizados');vProdutos()}catch(x){falha(x)}};
     $('#ptab').onclick=e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const p=cat.produtos.find(x=>x.id===tr.dataset.id);
-      const m=modal(`<header><h3>${esc(p.nome)}</h3><button data-fechar>×</button></header><div class="body"><div class="grid2">
+      const m=modal(`<header><h3>Editar produto</h3><button data-fechar aria-label="Fechar">×</button></header><div class="body">
+       <section><h4>Dados do produto</h4><div class="grid2">
+       <div class="field"><label for="qcodigo">Código</label><input id="qcodigo" readonly value="${esc(p.codigo||'')}"></div>
+       <div class="field"><label for="qnome">Nome no Bling</label><input id="qnome" readonly value="${esc(p.nome||'')}"></div>
+       </div><div class="field"><label for="q6">Descrição na loja</label><textarea id="q6">${esc(p.descricao)}</textarea></div></section>
+       <section><h4>Imagem do produto</h4>${p.imagem?`<img src="${esc(p.imagem)}" alt="Imagem de ${esc(p.nome)}" style="width:96px;height:96px;object-fit:contain">`:'<p>Sem imagem cadastrada.</p>'}</section>
+       <section><h4>Preços</h4><div class="field"><label for="qpreco">Preço base do Bling</label><input id="qpreco" readonly value="${esc(R$(p.precoBase))}"></div></section>
+       <section><h4>Organização na loja</h4><div class="grid2">
        <div class="field"><label for="q1">Categoria</label><input id="q1" list="qcl" value="${esc(p.categoria)}"><datalist id="qcl">${cat.categorias.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
        <div class="field"><label for="q2">Marca</label><input id="q2" value="${esc(p.marca)}"></div>
        <div class="field"><label for="q3">Ordem na loja</label><input id="q3" inputmode="numeric" value="${p.ordem===999?'':p.ordem}"></div>
-       <div class="field"><label>Opções</label><label style="display:flex;gap:8px;align-items:center;height:42px"><input type="checkbox" id="q4" ${p.destaque?'checked':''}> Destaque</label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="q5" ${p.oculto?'checked':''}> Esconder da loja</label></div></div>
-       <div class="field"><label for="q6">Descrição na loja</label><textarea id="q6">${esc(p.descricao)}</textarea></div></div><footer><button class="btn" id="qsv">Salvar</button></footer>`);
+       <div class="field"><label>Opções</label><label style="display:flex;gap:8px;align-items:center;height:42px"><input type="checkbox" id="q4" ${p.destaque?'checked':''}> Destaque</label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="q5" ${p.oculto?'checked':''}> Esconder da loja</label></div></div></section>
+       </div><footer><button class="btn" id="qsv">Salvar produto</button></footer>`,{wide:true});
       m.querySelector('#qsv').onclick=async()=>{try{await api('salvarProdutoLoja',{produtoId:p.id,categoria:m.querySelector('#q1').value.trim(),marca:m.querySelector('#q2').value.trim(),ordem:m.querySelector('#q3').value,destaque:m.querySelector('#q4').checked?'sim':'',oculto:m.querySelector('#q5').checked?'sim':'',descricao:m.querySelector('#q6').value});toast('Produto atualizado');m.fechar();vProdutos()}catch(x){falha(x)}};
     }}
 }
