@@ -144,6 +144,14 @@ table.t{width:100%;border-collapse:collapse;background:var(--bg)}
 .ph h1{font-size:24px}
 .ph p{margin:4px 0 0;color:var(--muted);font-size:14px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cat-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}@media(max-width:860px){.cat-grid{grid-template-columns:1fr}}
+.cat-tipos{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:520px){.cat-tipos{grid-template-columns:1fr}}
+.cat-op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink)}.cat-op:has(input:checked){border-color:var(--blue);background:var(--sky)}.cat-op span{display:grid;gap:2px}.cat-op input{width:18px;height:18px;margin-top:2px;flex:none}.cat-op small{color:var(--muted);font-size:12px;font-weight:400}
+.cat-det{border-top:1px solid var(--line);padding:10px 0}.cat-det summary{cursor:pointer;font-weight:700;font-family:var(--fd);color:var(--bar)}
+.cat-checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 12px}.cat-ck{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px;cursor:pointer}.cat-ck small{color:var(--muted)}
+.cat-share{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}.rel-card{padding:18px;display:flex;flex-direction:column;gap:10px}.rel-card h3{font-size:17px;color:var(--bar)}.rel-card p{color:var(--muted);font-size:14px;margin:0}.rel-info{font-size:13px;background:var(--page);border-radius:8px;padding:8px 10px}.rel-card>.btn{margin-top:auto}
+.rel-fmt{display:flex;gap:6px}.rel-fmt label{flex:1;display:flex;gap:6px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:14px;cursor:pointer}.rel-fmt label:has(input:checked){border-color:var(--blue);background:var(--sky);font-weight:600}
 .pr-lote{position:sticky;top:0;z-index:3;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;padding:10px 12px;background:var(--sky);border:1px solid #c5d7fc;border-radius:10px}.pr-lote span{flex:1;min-width:150px;font-weight:600;color:var(--blue-ink)}
 .pr-sw{position:relative;display:inline-block;vertical-align:middle;width:38px;height:22px;border-radius:999px;background:#cbd5e1;margin-right:6px;transition:background .15s}.pr-sw i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0003;transition:left .15s}.pr-sw.on{background:var(--green)}.pr-sw.on i{left:19px}.pr-sw:disabled{opacity:.5}
 tr.sel td{background:#f4f7ff}
@@ -311,6 +319,8 @@ function api(acao,dados,quieto){
 }
 const falha=e=>toast(e.message||String(e));
 const ICON={
+  pdf:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm0 2.5L17.5 8H14zM8 13h2.5a1.5 1.5 0 0 1 0 3H9v2H8zm1 1v1h1.5a.5.5 0 0 0 0-1zm4-1h1.5a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H13zm1 1v3h.5a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1z"/></svg>',
+  rel:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 12v2h2v-2zm4-4v6h2v-6zm4-4v10h2V7z"/></svg>',
   cart:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM1 2v2h2l3.6 7.6-1.4 2.4C5 14.3 5 14.6 5 15c0 1.1.9 2 2 2h12v-2H7.4l1.1-2h7.4c.8 0 1.4-.4 1.7-1l3.6-6.5A1 1 0 0 0 20 4H5.2l-.9-2z"/></svg>',
   user:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6z"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>',
@@ -753,8 +763,8 @@ const GOP=()=>GESTAO()||OPER();
 let VIEW='dashboard';
 function iniciarPainel(){
   if(ME.papel==='caixa'){location.href='/pdv/';return}const MOT=ME.papel==='motorista';if(MOT)VIEW='rotas';const OPR=OPER();if(OPR&&VIEW==='dashboard')VIEW='pedidos';
-  const itens=MOT?[['rotas','Minhas rotas',ICON.rota]]:OPR?[['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes','Clientes',ICON.cli],['produtos','Produtos',ICON.prod],['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota]]:[['dashboard','Dashboard',ICON.dash],['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes',ME.papel==='vendedor'?'Meus clientes':'Clientes',ICON.cli],['produtos','Produtos',ICON.prod]]
-    .concat(GESTAO()?[['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota],['tabelas','Tabelas de preço',ICON.tab],['usuarios','Usuários',ICON.usr],['config','Configurações',ICON.cfg]]:[]);
+  const itens=MOT?[['rotas','Minhas rotas',ICON.rota]]:OPR?[['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes','Clientes',ICON.cli],['produtos','Produtos',ICON.prod],['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota],['catalogo','Catálogo PDF',ICON.pdf]]:[['dashboard','Dashboard',ICON.dash],['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes',ME.papel==='vendedor'?'Meus clientes':'Clientes',ICON.cli],['produtos','Produtos',ICON.prod],['catalogo','Catálogo PDF',ICON.pdf]]
+    .concat(GESTAO()?[['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota],['tabelas','Tabelas de preço',ICON.tab],['relatorios','Relatórios',ICON.rel],['usuarios','Usuários',ICON.usr],['config','Configurações',ICON.cfg]]:[]);
   $('#root').innerHTML=`<div class="mtop"><button id="mmenu" aria-label="Menu">${ICON.menu}</button><img src="${LOGO}" alt="Damião"><b style="font-family:var(--fd)" id="mtit"></b></div>
   <div class="adm"><aside class="side" id="side"><div class="top"><img src="${LOGO}" alt="Damião Burguer Shop"><div class="who"><b>${esc(ME.nome)}</b>${esc(ME.papelNome)}</div></div>
    <nav aria-label="Painel">${itens.map(([k,t,i])=>`<button data-v="${k}" aria-current="${k===VIEW}">${i}${t}</button>`).join('')}</nav>
@@ -772,7 +782,7 @@ function iniciarPainel(){
 function iniciarLojaEquipe(){ // equipe vê a loja com o preço padrão
   iniciarLoja().then(()=>{const h=$('.shop-h .wrap');const b=document.createElement('button');b.className='hbtn';b.innerHTML=ICON.dash+'<span>Voltar ao painel</span>';b.onclick=iniciarPainel;h.insertBefore(b,h.children[1])});
 }
-function abrirView(){if(VIEW!=='rotas')pararRastreio();$('#mtit').textContent=({rotas:'Rotas',dashboard:'Dashboard',pedidos:'Pedidos',novo:'Novo pedido',clientes:'Clientes',produtos:'Produtos',tabelas:'Tabelas de preço',usuarios:'Usuários',config:'Configurações',estoque:'Estoque'})[VIEW];({estoque:vEstoque,rotas:vRotas,dashboard:vDashboard,pedidos:vPedidos,novo:vNovo,clientes:vClientes,produtos:vProdutos,tabelas:vTabelas,usuarios:vUsuarios,config:vConfig})[VIEW]()}
+function abrirView(){if(VIEW!=='rotas')pararRastreio();$('#mtit').textContent=({rotas:'Rotas',dashboard:'Dashboard',pedidos:'Pedidos',novo:'Novo pedido',clientes:'Clientes',produtos:'Produtos',tabelas:'Tabelas de preço',usuarios:'Usuários',config:'Configurações',estoque:'Estoque',catalogo:'Catálogo PDF',relatorios:'Relatórios'})[VIEW];({estoque:vEstoque,rotas:vRotas,dashboard:vDashboard,pedidos:vPedidos,novo:vNovo,clientes:vClientes,produtos:vProdutos,tabelas:vTabelas,usuarios:vUsuarios,config:vConfig,catalogo:vCatalogo,relatorios:vRelatorios})[VIEW]()}
 const M=()=>$('#main');
 
 /* ---- dashboard ---- */
@@ -875,6 +885,193 @@ async function pedidoPdfAcao(p,acao,botao){
       toast('PDF baixado. Na conversa do WhatsApp, clique no clipe e anexe o arquivo '+nome+'.');
     }
   }catch(e){falha(e)}finally{if(botao)botao.disabled=false}
+}
+
+/* ---- Catálogo PDF ---- */
+const cdnPDF=()=>carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+async function imgDataURL(src,max=360){
+  try{const b=await fetch(src).then(r=>{if(!r.ok)throw 0;return r.blob()});const u=URL.createObjectURL(b);
+    const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=u});
+    const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
+    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);
+    return {d:c.toDataURL('image/jpeg',.82),w:c.width,h:c.height}}catch(e){return null}
+}
+function compartilharPDF(doc,nome,texto){
+  const blob=doc.output('blob'),f=new File([blob],nome,{type:'application/pdf'});
+  return {baixar:()=>doc.save(nome),
+    ver:()=>{const u=URL.createObjectURL(blob);if(!window.open(u,'_blank'))doc.save(nome);setTimeout(()=>URL.revokeObjectURL(u),120000)},
+    whats:async(tel)=>{if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],text:texto,title:nome});return}catch(e){if(e&&e.name==='AbortError')return}}
+      doc.save(nome);tel=String(tel||'').replace(/\D/g,'');if(tel&&!tel.startsWith('55'))tel='55'+tel;window.open('https://wa.me/'+(tel.length>=12?tel:'')+'?text='+encodeURIComponent(texto),'_blank');toast('PDF baixado. No WhatsApp, clique no clipe e anexe o arquivo '+nome+'.')},
+    email:()=>{doc.save(nome);location.href='mailto:?subject='+encodeURIComponent(nome.replace('.pdf',''))+'&body='+encodeURIComponent(texto+'\n\n(O PDF foi baixado: anexe o arquivo '+nome+'.)')}};
+}
+async function vCatalogo(){
+  M().innerHTML=`<div class="ph"><div><h1>Catálogo em PDF</h1><p>Monte um catálogo profissional dos produtos e compartilhe no WhatsApp, por e-mail ou impresso.</p></div></div>
+  <div class="cat-grid"><div class="card" style="padding:18px">
+   <h3 style="font-size:16px;margin-bottom:12px">Configurar catálogo</h3>
+   <div style="margin-bottom:12px"><div style="font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px">Tipo de catálogo</div><div class="cat-tipos"><label class="cat-op"><input type="radio" name="ctipo" value="grade" checked><span><b>Estilo da loja</b><small>Cartões com foto, nome e preço, 3 por linha</small></span></label><label class="cat-op"><input type="radio" name="ctipo" value="lista"><span><b>Layout padrão</b><small>Lista simples com código, produto, unidade e preço</small></span></label></div></div>
+   <div class="field"><label for="ctit">Título</label><input id="ctit" class="inp" value="Catálogo de produtos"></div>
+   <details class="cat-det" open><summary>Categorias</summary><div style="display:flex;gap:8px;margin:8px 0"><button class="btn o sm" type="button" id="cctodas">Marcar todas</button><button class="btn o sm" type="button" id="ccnenhuma">Desmarcar</button></div><div id="ccats" class="cat-checks"><span style="color:var(--muted)">Carregando…</span></div></details>
+   <details class="cat-det"><summary>Gerar com produtos específicos</summary><p style="color:var(--muted);font-size:13px;margin:6px 0">Se marcar algum produto aqui, o catálogo sai só com eles.</p><input id="cpb" class="inp" placeholder="Buscar produto" style="margin-bottom:8px"><div id="cprods" class="cat-checks" style="max-height:260px;overflow:auto"></div></details>
+   <details class="cat-det" open><summary>Demais configurações</summary>
+    <label class="cat-ck"><input type="checkbox" id="cpreco" checked> Exibir valores dos produtos</label>
+    <div class="field" style="margin:6px 0 10px 26px"><label for="ctab">Tabela de preço</label><select id="ctab" class="inp"><option value="padrao">Tabela padrão (preço do Bling)</option></select></div>
+    <label class="cat-ck"><input type="checkbox" id="cest"> Exibir saldos em estoque</label>
+    <label class="cat-ck"><input type="checkbox" id="cobs"> Exibir descrição dos produtos</label>
+    <label class="cat-ck"><input type="checkbox" id="cfoto" checked> Exibir fotos</label>
+    <label class="cat-ck"><input type="checkbox" id="cvis" checked> Só produtos que aparecem na loja</label>
+   </details>
+   <button class="btn" id="cgerar" style="width:100%;margin-top:14px;height:48px">Gerar catálogo em PDF</button>
+  </div>
+  <div class="card" style="padding:18px"><h3 style="font-size:16px">Gerou? Compartilhe onde quiser</h3><p id="cinfo" style="color:var(--muted);font-size:14px;margin:6px 0 14px">Configure ao lado e clique em Gerar.</p>
+   <div class="cat-share"><button class="btn" id="cwh" style="background:#16a34a" disabled>WhatsApp</button><button class="btn o" id="cem" disabled>E-mail</button><button class="btn o" id="cver" disabled>Visualizar / imprimir</button><button class="btn o" id="cbx" disabled>Baixar PDF</button></div>
+  </div></div>`;
+  let base,tabs=[];
+  try{[base,tabs]=await Promise.all([api('produtosPainel',{},true),api('listarTabelas',{},true).catch(()=>[]),carregarFotos()]);}catch(e){falha(e);return}
+  tabs.filter(t=>t.id!=='padrao').forEach(t=>$('#ctab').insertAdjacentHTML('beforeend',`<option value="${esc(t.id)}">${esc(t.nome)}</option>`));
+  const cats=[...new Set(base.produtos.map(p=>p.categoria||'Outros'))].sort((a,b)=>a.localeCompare(b,'pt'));
+  $('#ccats').innerHTML=cats.map(c=>`<label class="cat-ck"><input type="checkbox" value="${esc(c)}" checked> ${esc(c)} <small>(${base.produtos.filter(p=>(p.categoria||'Outros')===c).length})</small></label>`).join('');
+  $('#cctodas').onclick=()=>$$('#ccats input').forEach(i=>i.checked=true);$('#ccnenhuma').onclick=()=>$$('#ccats input').forEach(i=>i.checked=false);
+  const esp=new Set();const rp=()=>{const ws=norm($('#cpb').value).split(/\s+/).filter(Boolean);$('#cprods').innerHTML=base.produtos.filter(p=>ws.every(w=>norm(p.nome+' '+p.codigo).includes(w))).map(p=>`<label class="cat-ck"><input type="checkbox" value="${esc(p.id)}" ${esp.has(p.id)?'checked':''}> ${esc(p.nome)} <small>${esc(p.codigo)}</small></label>`).join('')};
+  $('#cpb').oninput=rp;rp();$('#cprods').onchange=e=>{e.target.checked?esp.add(e.target.value):esp.delete(e.target.value)};
+  $('#cpreco').onchange=()=>$('#ctab').disabled=!$('#cpreco').checked;
+  let atual=null;
+  $('#cgerar').onclick=async()=>{const b=$('#cgerar');b.disabled=true;b.textContent='Gerando…';
+    try{const tabId=$('#ctab').value,tabNome=$('#ctab').selectedOptions[0].text;
+      const cat=tabId==='padrao'?base:await api('produtosPainel',{tabelaId:tabId},true);
+      const marc=new Set($$('#ccats input:checked').map(i=>i.value)),so=$('#cvis').checked;
+      let l=cat.produtos.filter(p=>esp.size?esp.has(p.id):marc.has(p.categoria||'Outros')).filter(p=>!so||(!p.oculto&&(+p.preco>0||+p.precoBase>0)));
+      if(!l.length)throw Error('Nenhum produto com essas opções.');
+      l.forEach(p=>p.imagem=fotoProduto(p));
+      l.sort((a,b)=>(a.categoria||'Outros').localeCompare(b.categoria||'Outros','pt')||(a.ordem-b.ordem)||a.nome.localeCompare(b.nome,'pt'));
+      const op={tipo:$('[name=ctipo]:checked').value,titulo:$('#ctit').value.trim()||'Catálogo de produtos',preco:$('#cpreco').checked,tabNome:$('#cpreco').checked&&tabId!=='padrao'?tabNome:'',est:$('#cest').checked,obs:$('#cobs').checked,foto:$('#cfoto').checked};
+      const doc=await gerarCatalogoPDF(l,op,n=>b.textContent='Gerando… '+n+'/'+l.length);
+      const nome='catalogo_damiao_'+new Date().toISOString().slice(0,10)+'.pdf';
+      atual=compartilharPDF(doc,nome,'Olá! Segue o catálogo de produtos da Damião Pães'+(op.tabNome?' ('+op.tabNome+')':'')+'.');
+      $('#cinfo').textContent='Catálogo pronto: '+l.length+' produtos, '+doc.getNumberOfPages()+' página(s).';
+      ['#cwh','#cem','#cver','#cbx'].forEach(s=>$(s).disabled=false);atual.baixar();
+    }catch(e){falha(e)}finally{b.disabled=false;b.textContent='Gerar catálogo em PDF'}};
+  $('#cwh').onclick=()=>atual&&atual.whats();$('#cem').onclick=()=>atual&&atual.email();$('#cver').onclick=()=>atual&&atual.ver();$('#cbx').onclick=()=>atual&&atual.baixar();
+}
+async function gerarCatalogoPDF(l,op,prog){
+  await cdnPDF();const {jsPDF}=window.jspdf,d=new jsPDF({unit:'mm',format:'a4'}),W=210,H=297,M=10;
+  const AZ=[11,42,122],AM=[245,210,62],br=v=>'R$ '+(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const t=(s,x,y,o={})=>{d.setFont('helvetica',o.b?'bold':'normal');d.setFontSize(o.s||9);d.setTextColor(...(o.c||[19,33,63]));d.text(s,x,y,{align:o.a||'left',maxWidth:o.w});};
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const topo=()=>{d.setFillColor(...AZ);d.rect(0,0,W,24,'F');try{d.addImage(LOGO,'JPEG',M,3,18,18)}catch(e){}
+    t(op.titulo,M+23,11,{b:1,s:15,c:[255,255,255]});t('Damião Pães'+(op.tabNome?' · '+op.tabNome:'')+' · '+hoje,M+23,17.5,{s:9,c:[220,230,255]});
+    if(LOJA.lojaWhatsapp)t('WhatsApp '+LOJA.lojaWhatsapp,W-M,11,{b:1,s:9,c:[255,255,255],a:'right'});
+    d.setFillColor(...AM);d.rect(0,24,W,1.6,'F');return 32};
+  const rodape=()=>{const n=d.getNumberOfPages();for(let k=1;k<=n;k++){d.setPage(k);d.setDrawColor(200);d.setLineWidth(.2);d.line(M,H-11,W-M,H-11);t((LOJA.lojaEndereco||'Damião Pães · Tatuí/SP')+(LOJA.lojaEmail?' · '+LOJA.lojaEmail:''),M,H-6.5,{s:7,c:[107,122,153]});t('Página '+k+' de '+n,W-M,H-6.5,{s:7,c:[107,122,153],a:'right'})}};
+  const fotos={};if(op.foto){let n=0;for(const p of l){if(p.imagem&&!(p.imagem in fotos))fotos[p.imagem]=await imgDataURL(p.imagem);prog&&prog(++n)}}
+  const precoTxt=p=>op.preco?br(p.preco||p.precoBase):'';
+  let y=topo(),cat=null;
+  const tituloCat=c=>{if(y+12>H-16){d.addPage();y=topo()}d.setFillColor(232,239,255);d.roundedRect(M,y,W-2*M,8,1.5,1.5,'F');d.setFillColor(...AM);d.rect(M,y,2,8,'F');t(c,M+5,y+5.6,{b:1,s:11,c:AZ});y+=11};
+  if(op.tipo==='lista'){
+    const cols=op.foto?[['',16],['Cód.',22],['Produto',92],['Un.',14],['Preço',28],['Estoque',18]]:[['Cód.',24],['Produto',106],['Un.',14],['Preço',28],['Estoque',18]];
+    const hd=()=>{let x=M;d.setFillColor(...AZ);d.rect(M,y,W-2*M,6.5,'F');cols.forEach(([n,w])=>{if(n==='Estoque'&&!op.est)return;if(n==='Preço'&&!op.preco)return;t(n,x+1.5,y+4.5,{b:1,s:8,c:[255,255,255]});x+=w});y+=6.5};
+    let zebra=0;
+    for(const p of l){const c=p.categoria||'Outros';if(c!==cat){cat=c;tituloCat(c);hd();zebra=0}
+      const nomeL=d.setFontSize(9).splitTextToSize(p.nome,(op.foto?92:106)-3),obsL=op.obs&&p.descricao?d.setFontSize(7).splitTextToSize(p.descricao,(op.foto?92:106)-3).slice(0,3):[];
+      const h=Math.max(op.foto?14:7,nomeL.length*4+obsL.length*3+3);
+      if(y+h>H-16){d.addPage();y=topo();t(c+' (continuação)',M,y+4,{b:1,s:9,c:AZ});y+=7;hd()}
+      if(zebra++%2){d.setFillColor(246,248,253);d.rect(M,y,W-2*M,h,'F')}
+      let x=M;for(const [n,w] of cols){
+        if(n===''){const f=fotos[p.imagem];if(f){const k=Math.min((w-3)/f.w,(h-2)/f.h);d.addImage(f.d,'JPEG',x+1.5+((w-3)-f.w*k)/2,y+1+((h-2)-f.h*k)/2,f.w*k,f.h*k)}}
+        else if(n==='Cód.')t(p.codigo||'',x+1.5,y+5,{s:8});
+        else if(n==='Produto'){t(nomeL,x+1.5,y+5,{b:1,s:9});if(obsL.length)t(obsL,x+1.5,y+5+nomeL.length*4,{s:7,c:[107,122,153]})}
+        else if(n==='Un.')t(p.unidade||'UN',x+1.5,y+5,{s:8});
+        else if(n==='Preço'){if(!op.preco)continue;t(precoTxt(p),x+w-2,y+5,{b:1,s:9,c:AZ,a:'right'})}
+        else if(n==='Estoque'){if(!op.est)continue;t(p.estoque==null?'—':Number(p.estoque).toLocaleString('pt-BR'),x+w-2,y+5,{s:8,a:'right'})}
+        x+=w}
+      d.setDrawColor(225);d.setLineWidth(.15);d.line(M,y+h,W-M,y+h);y+=h}
+  }else{
+    const nc=3,gap=5,cw=(W-2*M-gap*(nc-1))/nc,fh=op.foto?42:0;let col=0,rowH=0;
+    for(const p of l){const c=p.categoria||'Outros';
+      if(c!==cat){if(col){y+=rowH+gap;col=0}cat=c;tituloCat(c)}
+      const nomeL=d.setFontSize(9.5).splitTextToSize(p.nome,cw-6).slice(0,3),obsL=op.obs&&p.descricao?d.setFontSize(7).splitTextToSize(p.descricao,cw-6).slice(0,3):[];
+      const ch=fh+8+nomeL.length*4.2+obsL.length*3+(op.preco?9:0)+(op.est?4:0)+4;
+      if(col===0&&y+ch>H-16){d.addPage();y=topo();t(c+' (continuação)',M,y+4,{b:1,s:9,c:AZ});y+=8}
+      const x=M+col*(cw+gap);
+      d.setDrawColor(223,229,242);d.setLineWidth(.3);d.setFillColor(255,255,255);d.roundedRect(x,y,cw,ch,2.5,2.5,'FD');
+      let yy=y+3;
+      if(op.foto){const f=fotos[p.imagem];if(f){const k=Math.min((cw-6)/f.w,(fh-4)/f.h);d.addImage(f.d,'JPEG',x+3+((cw-6)-f.w*k)/2,yy+((fh-4)-f.h*k)/2,f.w*k,f.h*k)}else{d.setFillColor(238,242,251);d.roundedRect(x+3,yy,cw-6,fh-4,2,2,'F');t('sem foto',x+cw/2,yy+fh/2,{s:8,c:[160,170,190],a:'center'})}yy+=fh}
+      t(p.codigo?(p.codigo+' · '+(p.unidade||'UN')):(p.unidade||'UN'),x+3,yy+3,{s:7,c:[107,122,153]});yy+=7;
+      t(nomeL,x+3,yy,{b:1,s:9.5});yy+=nomeL.length*4.2;
+      if(obsL.length){t(obsL,x+3,yy,{s:7,c:[107,122,153]});yy+=obsL.length*3}
+      if(op.preco){d.setFillColor(...AM);d.roundedRect(x+3,yy,cw-6,7.5,1.5,1.5,'F');t(precoTxt(p),x+cw/2,yy+5.3,{b:1,s:11,c:AZ,a:'center'});yy+=9}
+      if(op.est)t('Estoque: '+(p.estoque==null?'—':Number(p.estoque).toLocaleString('pt-BR')),x+3,yy+3,{s:7,c:[107,122,153]});
+      rowH=Math.max(col?rowH:0,ch);col++;if(col===nc){y+=rowH+gap;col=0;rowH=0}}
+  }
+  rodape();return d;
+}
+
+/* ---- Relatórios e exportações ---- */
+const cdnXLSX=()=>carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+async function exportarTabela(nome,titulo,cols,linhas,fmt){
+  if(!linhas.length)throw Error('Nenhum dado com esses filtros.');
+  const arq=nome+'_'+new Date().toISOString().slice(0,10);
+  const val=(c,r)=>{const v=r[c.k];return v==null?'':v};
+  if(fmt==='xlsx'){await cdnXLSX();const ws=XLSX.utils.aoa_to_sheet([cols.map(c=>c.t),...linhas.map(r=>cols.map(c=>val(c,r)))]);
+    ws['!cols']=cols.map(c=>({wch:Math.min(50,Math.max(c.t.length,...linhas.slice(0,300).map(r=>String(val(c,r)).length))+2)}));
+    cols.forEach((c,j)=>{if(c.m)for(let i=1;i<=linhas.length;i++){const ref=XLSX.utils.encode_cell({r:i,c:j});if(ws[ref]&&typeof ws[ref].v==='number')ws[ref].z='#,##0.00'}});
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,titulo.slice(0,31));XLSX.writeFile(wb,arq+'.xlsx');return}
+  if(fmt==='csv'){const q=s=>{s=String(s);return /[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+    const txt='﻿'+[cols.map(c=>q(c.t)).join(';'),...linhas.map(r=>cols.map(c=>{const v=val(c,r);return q(typeof v==='number'?String(v).replace('.',','):v)}).join(';'))].join('\r\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download=arq+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);return}
+  await cdnPDF();const {jsPDF}=window.jspdf,d=new jsPDF({unit:'mm',format:'a4',orientation:cols.length>6?'landscape':'portrait'});
+  const W=d.internal.pageSize.getWidth(),H=d.internal.pageSize.getHeight(),M=8,tot=cols.reduce((s,c)=>s+(c.w||1),0),esc_=(W-2*M)/tot;
+  const t=(s,x,y,o={})=>{d.setFont('helvetica',o.b?'bold':'normal');d.setFontSize(o.s||7.5);d.setTextColor(...(o.c||[19,33,63]));d.text(String(s),x,y,{align:o.a||'left'})};
+  let y=0;const topo=()=>{d.setFillColor(11,42,122);d.rect(0,0,W,16,'F');try{d.addImage(LOGO,'JPEG',M,2,12,12)}catch(e){}t(titulo,M+16,8,{b:1,s:12,c:[255,255,255]});t('Damião Pães · gerado em '+new Date().toLocaleString('pt-BR').replace(',','')+' · '+linhas.length+' registro(s)',M+16,13,{s:7.5,c:[220,230,255]});y=21;
+    let x=M;d.setFillColor(232,239,255);d.rect(M,y,W-2*M,6,'F');cols.forEach(c=>{const w=(c.w||1)*esc_;t(c.t,c.m||c.n?x+w-1.2:x+1.2,y+4.2,{b:1,s:7,a:c.m||c.n?'right':'left'});x+=w});y+=6};
+  topo();
+  linhas.forEach((r,i)=>{if(y+6>H-10){d.addPage();topo()}if(i%2){d.setFillColor(247,249,253);d.rect(M,y,W-2*M,5.5,'F')}let x=M;
+    cols.forEach(c=>{const w=(c.w||1)*esc_;let v=val(c,r);v=c.m&&v!==''?(+v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):c.n&&v!==''?(+v).toLocaleString('pt-BR'):String(v);
+      const s=d.setFontSize(7).splitTextToSize(v,w-2)[0]||'';t(s,c.m||c.n?x+w-1.2:x+1.2,y+3.9,{s:7,a:c.m||c.n?'right':'left'});x+=w});y+=5.5});
+  const somas=cols.filter(c=>c.soma);if(somas.length){if(y+8>H-10){d.addPage();topo()}d.setDrawColor(11,42,122);d.setLineWidth(.4);d.line(M,y+1,W-M,y+1);let x=M;
+    cols.forEach((c,j)=>{const w=(c.w||1)*esc_;if(j===0)t('TOTAL',x+1.2,y+5.5,{b:1,s:7.5});if(c.soma)t(linhas.reduce((s,r)=>s+(+r[c.k]||0),0).toLocaleString('pt-BR',c.m?{minimumFractionDigits:2,maximumFractionDigits:2}:{}),x+w-1.2,y+5.5,{b:1,s:7.5,a:'right'});x+=w})}
+  const n=d.getNumberOfPages();for(let k=1;k<=n;k++){d.setPage(k);t('Página '+k+' de '+n,W-M,H-4,{s:7,c:[107,122,153],a:'right'})}
+  d.save(arq+'.pdf');
+}
+async function vRelatorios(){
+  const hoje=new Date(),ini=new Date(hoje.getFullYear(),hoje.getMonth(),1),iso=x=>new Date(x.getTime()-x.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+  const fmtSel=id=>`<div class="rel-fmt" role="group" aria-label="Formato"><label><input type="radio" name="${id}" value="xlsx" checked> Excel</label><label><input type="radio" name="${id}" value="pdf"> PDF</label><label><input type="radio" name="${id}" value="csv"> CSV</label></div>`;
+  const card=(id,tit,desc,info,filtros='')=>`<div class="card rel-card"><h3>${tit}</h3><p>${desc}</p><div class="rel-info">${info}</div>${filtros}${fmtSel('f'+id)}<button class="btn" data-rel="${id}">Exportar dados</button></div>`;
+  M().innerHTML=`<div class="ph"><div><h1>Relatórios e exportações</h1><p>Escolha o relatório, configure os filtros e exporte em Excel, PDF ou CSV.</p></div></div>
+  <div class="rel-grid">
+   ${card('cli','Clientes','Lista completa de clientes com filtros.','Nome, documento, e-mail, telefone, endereço, vendedor, tabela e compras',`<div class="grid2"><div class="field"><label for="rcst">Situação</label><select id="rcst" class="inp"><option value="">Todos</option><option value="aprovado">Aprovados</option><option value="pendente">Aguardando aprovação</option></select></div><div class="field"><label for="rcci">Cidade</label><select id="rcci" class="inp"><option value="">Todas</option></select></div></div>`)}
+   ${card('prod','Produtos','Catálogo de produtos com preços e estoque.','Código, descrição, categoria, preço, saldo e status na loja',`<label class="cat-ck"><input type="checkbox" id="rpvis"> Só produtos que aparecem na loja</label>`)}
+   ${card('ped','Pedidos','Relatório de pedidos por período.','Data, status, cliente, vendedor, forma de pagamento e valores',`<div class="grid2"><div class="field"><label for="rpde">De</label><input type="date" id="rpde" class="inp" value="${iso(ini)}"></div><div class="field"><label for="rpate">Até</label><input type="date" id="rpate" class="inp" value="${iso(hoje)}"></div><div class="field"><label for="rpst">Status</label><select id="rpst" class="inp"><option value="">Todos (menos cancelados)</option>${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue','Cancelado'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="field"><label for="rpfp">Forma de pagamento</label><select id="rpfp" class="inp"><option value="">Todas</option></select></div></div><div class="field"><label for="rpcli">Cliente</label><select id="rpcli" class="inp"><option value="">Todos</option></select></div><label class="cat-ck"><input type="checkbox" id="rpit"> Detalhar itens (uma linha por produto)</label>`)}
+   ${card('est','Estoque','Saldos atualizados do Bling por produto.','Saldo, preço e valor total em estoque',`<label class="cat-ck"><input type="checkbox" id="rezero"> Esconder produtos com saldo zero</label>`)}
+   ${card('pre','Preços','Preços de todas as tabelas por produto.','Produto, preço do Bling e preço em cada tabela','')}
+  </div>`;
+  let cache={};const get=(k,f)=>cache[k]||(cache[k]=f());
+  get('cli',()=>api('listarClientes',{},true)).then(cl=>{const cid=[...new Set(cl.map(c=>c.cidade).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));$('#rcci').insertAdjacentHTML('beforeend',cid.map(c=>`<option>${esc(c)}</option>`).join(''));$('#rpcli').insertAdjacentHTML('beforeend',cl.slice().sort((a,b)=>(a.fantasia||a.nome).localeCompare(b.fantasia||b.nome,'pt')).map(c=>`<option value="${esc(c.id)}">${esc(c.fantasia||c.nome)}</option>`).join(''))}).catch(()=>{});
+  get('fp',()=>api('formasPagamento',{},true)).then(f=>$('#rpfp').insertAdjacentHTML('beforeend',f.map(x=>`<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join(''))).catch(()=>{});
+  const dt=s=>{const x=new Date(s);return isNaN(x)?'':x.toLocaleDateString('pt-BR')};
+  const R={
+    cli:async()=>{let l=await get('cli',()=>api('listarClientes',{},true));const st=$('#rcst').value,ci=$('#rcci').value;l=l.filter(c=>(!st||c.status===st)&&(!ci||c.cidade===ci));
+      return ['clientes','Clientes',[{k:'nome',t:'Nome / Razão social',w:3},{k:'fantasia',t:'Fantasia',w:2.4},{k:'documento',t:'CPF/CNPJ',w:1.8},{k:'email',t:'E-mail',w:2.4},{k:'telefone',t:'Telefone',w:1.5},{k:'end',t:'Endereço',w:3},{k:'bairro',t:'Bairro',w:1.5},{k:'cidade',t:'Cidade',w:1.5},{k:'uf',t:'UF',w:.5},{k:'cep',t:'CEP',w:1.1},{k:'vendedorNome',t:'Vendedor',w:1.5},{k:'tabelaNome',t:'Tabela',w:1.5},{k:'pedidos',t:'Pedidos',w:.8,n:1,soma:1},{k:'faturado',t:'Total comprado',w:1.4,m:1,soma:1},{k:'ultimo',t:'Último pedido',w:1.2},{k:'situacao',t:'Situação',w:1.1}],
+        l.map(c=>({...c,end:[c.endereco,c.numero].filter(Boolean).join(', '),ultimo:dt(c.ultimoPedido),situacao:c.status==='aprovado'?'Aprovado':c.status==='pendente'?'Aguardando':c.status||'',faturado:c.faturado==null?'':+c.faturado}))]},
+    prod:async()=>{let l=(await get('prod',()=>api('produtosPainel',{},true))).produtos;if($('#rpvis').checked)l=l.filter(p=>!p.oculto&&p.precoBase>0);
+      return ['produtos','Produtos',[{k:'codigo',t:'Código',w:1.2},{k:'nome',t:'Descrição',w:4},{k:'categoria',t:'Categoria',w:1.8},{k:'marca',t:'Marca',w:1.3},{k:'unidade',t:'Un.',w:.6},{k:'gtin',t:'GTIN',w:1.5},{k:'precoBase',t:'Preço',w:1.1,m:1},{k:'estoque',t:'Saldo',w:.9,n:1},{k:'loja',t:'Na loja',w:.9}],
+        l.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt')).map(p=>({...p,precoBase:+p.precoBase||0,estoque:p.estoque==null?'':+p.estoque,loja:p.oculto?'Pausado':p.precoBase>0?'Sim':'Sem preço'}))]},
+    ped:async()=>{const [l,fp]=await Promise.all([get('ped',()=>api('listarPedidos',{},true)),get('fp',()=>api('formasPagamento',{},true)).catch(()=>[])]);
+      const de=$('#rpde').value,ate=$('#rpate').value,st=$('#rpst').value,f=$('#rpfp').value,c=$('#rpcli').value,fn=id=>(fp.find(x=>String(x.id)===String(id))||{}).nome||'';
+      const sel=l.filter(p=>{const d=iso(new Date(p.data));return(!de||d>=de)&&(!ate||d<=ate)&&(st?p.status===st:p.status!=='Cancelado')&&(!f||String(p.formaPagamentoId)===f)&&(!c||String(p.clienteId)===c)}).sort((a,b)=>String(a.data).localeCompare(String(b.data)));
+      if($('#rpit').checked)return ['pedidos_itens','Pedidos por item',[{k:'numero',t:'Pedido',w:.8},{k:'data',t:'Data',w:1},{k:'cliente',t:'Cliente',w:2.6},{k:'codigo',t:'Código',w:1},{k:'nome',t:'Produto',w:3.2},{k:'qtd',t:'Qtd.',w:.7,n:1,soma:1},{k:'unidade',t:'Un.',w:.6},{k:'preco',t:'Preço',w:1,m:1},{k:'total',t:'Total',w:1.1,m:1,soma:1},{k:'status',t:'Status',w:1.3}],
+        sel.flatMap(p=>(p.itens||[]).map(i=>({numero:p.numero,data:dt(p.data),cliente:p.cliente,codigo:i.codigo,nome:i.nome,qtd:+i.qtd,unidade:i.unidade||'',preco:+i.preco,total:+i.total,status:p.status})))];
+      return ['pedidos','Pedidos',[{k:'numero',t:'Pedido',w:.8},{k:'data',t:'Data',w:1},{k:'cliente',t:'Cliente',w:2.8},{k:'cidade',t:'Cidade',w:1.4},{k:'vendedor',t:'Vendedor',w:1.4},{k:'forma',t:'Forma de pagamento',w:1.6},{k:'status',t:'Status',w:1.3},{k:'qitens',t:'Itens',w:.6,n:1},{k:'frete',t:'Frete',w:.9,m:1,soma:1},{k:'total',t:'Total',w:1.1,m:1,soma:1},{k:'bling',t:'Bling nº',w:.9}],
+        sel.map(p=>({numero:p.numero,data:dt(p.data),cliente:p.cliente,cidade:p.cidade,vendedor:p.vendedor,forma:fn(p.formaPagamentoId),status:p.status,qitens:(p.itens||[]).length,frete:+p.frete||0,total:+p.total||0,bling:p.blingNumero||''}))]},
+    est:async()=>{const [s,c]=await Promise.all([get('est',()=>api('estoqueSaldos',{},true)),get('prod',()=>api('produtosPainel',{},true))]);const pr={};c.produtos.forEach(p=>pr[p.id]=+p.precoBase||0);
+      let l=s.map(x=>({...x,saldo:x.saldo==null?'':+x.saldo,preco:pr[String(x.id)]||0}));if($('#rezero').checked)l=l.filter(x=>+x.saldo);l.forEach(x=>x.valor=Math.round((+x.saldo||0)*x.preco*100)/100);
+      return ['estoque','Estoque',[{k:'codigo',t:'Código',w:1.2},{k:'nome',t:'Produto',w:4},{k:'unidade',t:'Un.',w:.7},{k:'saldo',t:'Saldo',w:1,n:1,soma:1},{k:'preco',t:'Preço de venda',w:1.3,m:1},{k:'valor',t:'Valor total',w:1.4,m:1,soma:1}],l]},
+    pre:async()=>{const [base,tabs]=await Promise.all([get('prod',()=>api('produtosPainel',{},true)),api('listarTabelas',{},true)]);const outras=tabs.filter(t=>t.id!=='padrao');
+      const cats=await Promise.all(outras.map(t=>api('produtosPainel',{tabelaId:t.id},true)));
+      const l=base.produtos.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt')).map(p=>{const o={codigo:p.codigo,nome:p.nome,unidade:p.unidade,base:+p.precoBase||0};cats.forEach((c,i)=>{const x=c.produtos.find(q=>q.id===p.id);o['t'+i]=x&&x.precoTabela?+x.preco:''});return o});
+      return ['precos','Tabelas de preço',[{k:'codigo',t:'Código',w:1.1},{k:'nome',t:'Produto',w:3.4},{k:'unidade',t:'Un.',w:.6},{k:'base',t:'Preço Bling',w:1.1,m:1},...outras.map((t,i)=>({k:'t'+i,t:t.nome,w:1.1,m:1}))],l]}
+  };
+  $('#main').addEventListener('click',async e=>{const b=e.target.closest('[data-rel]');if(!b)return;const id=b.dataset.rel,fmt=$(`[name=f${id}]:checked`).value;b.disabled=true;const tx=b.textContent;b.textContent='Gerando…';
+    try{const [nome,tit,cols,l]=await R[id]();await exportarTabela(nome,tit,cols,l,fmt);toast('Relatório exportado: '+l.length+' registro(s)')}catch(x){falha(x)}finally{b.disabled=false;b.textContent=tx}});
 }
 
 /* ---- pedidos ---- */
