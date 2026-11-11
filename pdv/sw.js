@@ -1,5 +1,5 @@
 // PDV Damião — guarda o app no aparelho para abrir sem internet
-const CACHE='pdv-damiao-v5-novocli';
+const CACHE='pdv-damiao-v6-obs-taxa';
 const APP=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./caixa-core.js','./caixa.js','./caixa.css','./alteracoes.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(APP)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('pdv-damiao-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});

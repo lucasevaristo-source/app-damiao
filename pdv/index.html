@@ -100,7 +100,7 @@ table.items{width:100%;border-collapse:collapse}
 .ed svg{width:16px;height:16px}
 .nada{display:flex;flex-direction:column;align-items:center;gap:6px;color:#9e9e9e;font-size:18px;padding-top:8px;text-align:center}
 .nada svg{width:36px;height:36px;color:#9e9e9e}
-.resumo{grid-column:3;grid-row:1;border-left:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.resumo{grid-column:3;grid-row:1/3;border-left:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .cpf{display:flex;align-items:center;border-bottom:1px solid var(--line);height:46px;flex:none}
 .cpf input{flex:1;min-width:0;border:0;outline:0;padding:0 12px;font-size:15px;background:transparent;height:100%}
 .cpf input::placeholder{color:#9e9e9e}
@@ -108,11 +108,13 @@ table.items{width:100%;border-collapse:collapse}
 .rline{display:flex;justify-content:space-between;align-items:center;padding:0 16px;height:46px;font-size:15.5px;flex:none}
 .rline.big{font-size:19px;font-weight:700}
 .rline.click{cursor:pointer}.rline.click:hover{background:#fafafa}
+.rline .fk{color:#9e9e9e;font-size:11px;font-weight:400}
+.rline.obsline{gap:12px}.obsv{max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;text-align:right}.obsv.vazio{color:var(--blue-ink);text-decoration:underline;text-underline-offset:3px}
 .spacer{flex:1}
 .paybtn{height:47px;flex:none;color:#fff;font-size:16px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--orange)}
 .paybtn small{font-weight:400;font-size:12px;opacity:.85}
 .paybtn.ready{background:var(--green)}
-.prods{grid-column:2/4;grid-row:2;overflow:auto;background:var(--page);padding:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));align-content:start;gap:8px}
+.prods{grid-column:2/3;grid-row:2;overflow:auto;background:var(--page);padding:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));align-content:start;gap:8px}
 .prod{background:var(--bg);border-radius:3px;box-shadow:0 1px 2px rgba(0,0,0,.16);min-height:66px;padding:8px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center}
 .prod b{font-size:13px;font-weight:700;letter-spacing:.03em;line-height:1.3}
 .prod span{font-size:13px;color:#555}
@@ -392,7 +394,9 @@ table.list{width:100%;border-collapse:collapse}
         <div class="resumo">
           <div class="cpf"><input id="cpf" placeholder="CPF na nota (F6)" inputmode="numeric" aria-label="CPF na nota"><button id="cpfTipo">CNPJ ⇄</button></div>
           <div class="rline"><span id="rProdLbl">Produtos</span><span class="num" id="rProd">R$ 0,00</span></div>
-          <div class="rline click" id="rDescLine" title="Clique para dar desconto"><span>Desconto</span><span class="num" id="rDesc">0.00%</span></div>
+          <div class="rline click" id="rDescLine" title="Clique para dar desconto em R$ ou %"><span>Desconto <small class="fk">(F4)</small></span><span class="num" id="rDesc">R$ 0,00</span></div>
+          <div class="rline click" id="rTaxaLine" title="Clique para colocar a taxa de entrega"><span>Taxa de entrega <small class="fk">(F7)</small></span><span class="num" id="rTaxa">R$ 0,00</span></div>
+          <div class="rline click obsline" id="rObsLine" title="Clique para escrever uma observação"><span>Observação <small class="fk">(F10)</small></span><span id="rObs" class="obsv vazio">Adicionar</span></div>
           <div class="rline big"><span>Total</span><span class="num" id="rTot">R$ 0,00</span></div>
           <div class="spacer"></div>
           <button class="paybtn" id="btnPagar">Pagamento <small>(F2)</small></button>
@@ -420,7 +424,9 @@ table.list{width:100%;border-collapse:collapse}
           <div class="plist" id="plist"></div>
           <div class="cpf"><input id="cpf2" placeholder="CPF na nota (F6)" inputmode="numeric" aria-label="CPF na nota"><button id="cpfTipo2">CNPJ ⇄</button></div>
           <div class="rline"><span id="pProdLbl">Produtos</span><span class="num" id="pProd">R$ 0,00</span></div>
-          <div class="rline"><span>Desconto</span><span class="num" id="pDesc">0.00%</span></div>
+          <div class="rline click" id="pDescLine" title="Clique para dar desconto"><span>Desconto</span><span class="num" id="pDesc">R$ 0,00</span></div>
+          <div class="rline click" id="pTaxaLine" title="Clique para colocar a taxa de entrega"><span>Taxa de entrega</span><span class="num" id="pTaxa">R$ 0,00</span></div>
+          <div class="rline click obsline" id="pObsLine" title="Clique para escrever uma observação"><span>Observação</span><span id="pObs" class="obsv vazio">Adicionar</span></div>
           <div class="rline big"><span>Total</span><span class="num" id="pTot">R$ 0,00</span></div>
           <div class="rline"><span>Recebido</span><span class="num" id="pRec">R$ 0,00</span></div>
           <div class="rline"><span>A receber</span><span class="num" id="pFalta">R$ 0,00</span></div>
@@ -531,10 +537,27 @@ table.list{width:100%;border-collapse:collapse}
 <div id="mDesc" class="modal" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dsTitle">
   <header><span id="dsTitle">Desconto na venda</span><button data-close aria-label="Fechar">×</button></header>
   <div class="body">
-    <div class="fld"><label for="dsPct">Desconto (%)</label><input id="dsPct" inputmode="decimal" class="num"></div>
-    <div class="fld"><label for="dsVal">ou valor (R$)</label><input id="dsVal" inputmode="decimal" class="num"></div>
+        <div class="fld"><label for="dsVal">Desconto em reais (R$)</label><input id="dsVal" inputmode="decimal" class="num" placeholder="Ex.: 5,00"></div>
+        <div class="fld"><label for="dsPct">ou em porcentagem (%)</label><input id="dsPct" inputmode="decimal" class="num" placeholder="Ex.: 10"></div>
+        <p class="hint" id="dsInfo" style="margin:4px 0 0"></p>
   </div>
   <footer><button data-close style="color:var(--blue-ink)">Cancelar</button><button id="dsOk" style="background:var(--blue);color:#fff">Aplicar</button></footer>
+</div></div>
+<div id="mTaxa" class="modal" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="txTitle">
+  <header><span id="txTitle">Taxa de entrega</span><button data-close aria-label="Fechar">×</button></header>
+  <div class="body">
+    <div class="fld"><label for="txVal">Valor da taxa de entrega (R$)</label><input id="txVal" inputmode="decimal" class="num" placeholder="Ex.: 8,00"></div>
+    <p class="hint" style="margin:4px 0 0">A taxa soma no total da venda, sai no cupom e vai para o Bling como frete. Deixe em branco ou 0 para tirar.</p>
+  </div>
+  <footer><button data-close style="color:var(--blue-ink)">Cancelar</button><button id="txOk" style="background:var(--blue);color:#fff">Aplicar</button></footer>
+</div></div>
+<div id="mObs" class="modal" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+  <header><span id="obTitle">Observação da venda</span><button data-close aria-label="Fechar">×</button></header>
+  <div class="body">
+    <div class="fld"><label for="obTxt">Observação (sai no cupom)</label><textarea id="obTxt" rows="4" maxlength="300" placeholder="Ex.: Entregar no portão dos fundos. Sem cebola."></textarea></div>
+    <p class="hint" id="obCont" style="margin:4px 0 0">0/300</p>
+  </div>
+  <footer><button data-close style="color:var(--blue-ink)">Cancelar</button><button id="obOk" style="background:var(--blue);color:#fff">Salvar</button></footer>
 </div></div>
 <div id="mRecibo" class="modal recibo" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="rcTitle">
   <header><span id="rcTitle">Venda finalizada</span><span id="rcSub"></span></header>
@@ -607,7 +630,7 @@ let CAT={produtos:[],clientes:[],formas:[],listas:[],vendedores:[]};
 let IDX={cod:new Map()};
 let cart=newCart();
 let screen='inicio', catSel=null, selRow=-1;
-function newCart(){return{itens:[],cliente:null,cpf:'',descPct:0,descVal:0,pagamentos:[],forma:null}}
+function newCart(){return{itens:[],cliente:null,cpf:'',descPct:0,descVal:0,taxa:0,obs:'',pagamentos:[],forma:null}}
 
 async function loadCfg(){const m=await DB.get('meta','cfg');CFG={...DEF_CFG,...(m?m.v:{})}}
 async function saveCfg(){await DB.put('meta',{id:'cfg',v:CFG})}
@@ -693,9 +716,18 @@ const beep=()=>snd(1800,.06,.07,'sine'), errBeep=()=>snd(220,.05,.25,'square');
 const semDesc=()=>cart.itens.reduce((s,i)=>s+Math.round(i.preco*i.qtd),0);
 const bruto=()=>cart.itens.reduce((s,i)=>s+itemTotal(i),0);
 const descGeral=()=>cart.descVal?Math.min(cart.descVal,bruto()):Math.round(bruto()*(cart.descPct||0)/100);
-const total=()=>Math.max(0,bruto()-descGeral());
+const liquido=()=>Math.max(0,bruto()-descGeral());
+const taxaEnt=()=>Math.max(0,Math.round(cart.taxa||0));
+const total=()=>liquido()+taxaEnt();
+const descTotal=()=>Math.max(0,semDesc()-liquido());
 const pago=()=>cart.pagamentos.reduce((s,p)=>s+p.valor,0);
-const descPctTotal=()=>{const sd=semDesc();return sd?((sd-total())/sd*100):0};
+const descPctTotal=()=>{const sd=semDesc();return sd?(descTotal()/sd*100):0};
+const descTxt=()=>descTotal()?'− '+R$(descTotal())+' ('+descPctTotal().toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%)':'R$ 0,00';
+function renderExtras(){
+  $$('#rDesc,#pDesc').forEach(x=>x.textContent=descTxt());
+  $$('#rTaxa,#pTaxa').forEach(x=>x.textContent=taxaEnt()?'+ '+R$(taxaEnt()):'R$ 0,00');
+  const o=(cart.obs||'').trim();$$('#rObs,#pObs').forEach(x=>{x.textContent=o||'Adicionar';x.title=o;x.classList.toggle('vazio',!o)});
+}
 const nItens=()=>cart.itens.reduce((s,i)=>s+i.qtd,0);
 
 function renderCart(){
@@ -707,7 +739,7 @@ function renderCart(){
   $('#cart').innerHTML=h+'</tbody></table>';
   const s=$('#cart tr.sel');if(s)s.scrollIntoView({block:'nearest'});
   $('#rProdLbl').textContent='Produtos'+(cart.itens.length?' ('+fqs(nItens())+')':'');$('#rProd').textContent=R$(semDesc());
-  $('#rDesc').textContent=descPctTotal().toFixed(2)+'%';$('#rTot').textContent=R$(total());
+  renderExtras();$('#rTot').textContent=R$(total());
   $('#btnPagar').classList.toggle('ready',cart.itens.length>0);
   saveDraft();
 }
@@ -727,9 +759,20 @@ $('#edOk').onclick=()=>{try{const i=cart.itens[edK];const q=parseBR($('#edQtd').
   if(q<=0)cart.itens.splice(edK,1);else{if(i.precoOriginal==null)i.precoOriginal=i.preco;if(preco!==i.preco){i.precoAlteradoPor=PdvCaixa.usuario.nome;i.precoAlteradoEm=new Date().toISOString();}i.qtd=q;i.preco=preco;i.descPct=d}cart.pagamentos=[];closeModals();renderCart();focusScan();}catch(e){toast(e.message)}};
 $('#mEdit').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#edOk').click()}});
 /* desconto geral */
-$('#rDescLine').onclick=()=>{if(!cart.itens.length)return;$('#dsPct').value=cart.descPct?cart.descPct.toLocaleString('pt-BR'):'';$('#dsVal').value=cart.descVal?fmt(cart.descVal):'';openModal('#mDesc');$('#dsPct').focus()};
-$('#dsPct').oninput=()=>{$('#dsVal').value=''};$('#dsVal').oninput=()=>{$('#dsPct').value=''};
-$('#dsOk').onclick=()=>{cart.descPct=Math.min(100,parseBR($('#dsPct').value)/100);cart.descVal=parseBR($('#dsVal').value);if(cart.descVal)cart.descPct=0;cart.pagamentos=[];closeModals();renderCart();focusScan()};
+function abrirDesconto(){if(!cart.itens.length){toast('Adicione produtos antes de dar desconto');return}$('#dsPct').value=cart.descPct?cart.descPct.toLocaleString('pt-BR'):'';$('#dsVal').value=cart.descVal?fmt(cart.descVal):'';dsInfo();openModal('#mDesc');$('#dsVal').select()}
+function dsInfo(){const b=bruto(),v=parseBR($('#dsVal').value),pc=parseBR($('#dsPct').value)/100;const d=v?Math.min(v,b):Math.round(b*Math.min(100,pc)/100);$('#dsInfo').textContent=d?'Desconto de '+R$(d)+' · total dos produtos fica '+R$(b-d):'Valor dos produtos: '+R$(b)}
+$('#rDescLine').onclick=abrirDesconto;$('#pDescLine').onclick=abrirDesconto;
+function abrirTaxa(){$('#txVal').value=cart.taxa?fmt(cart.taxa):'';openModal('#mTaxa');$('#txVal').select()}
+$('#rTaxaLine').onclick=abrirTaxa;$('#pTaxaLine').onclick=abrirTaxa;
+$('#txOk').onclick=()=>{const v=PdvMoney.centavos($('#txVal').value||'0');if(!(v>=0)){toast('Valor inválido');return}cart.taxa=v;cart.pagamentos=[];closeModals();renderCart();if(screen==='pagamento'){renderPay();setVal(total());$('#valor').focus()}else focusScan()};
+$('#mTaxa').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#txOk').click()}});
+function abrirObs(){$('#obTxt').value=cart.obs||'';$('#obCont').textContent=$('#obTxt').value.length+'/300';openModal('#mObs');$('#obTxt').focus()}
+$('#rObsLine').onclick=abrirObs;$('#pObsLine').onclick=abrirObs;
+$('#obTxt').oninput=()=>{$('#obCont').textContent=$('#obTxt').value.length+'/300'};
+$('#obOk').onclick=()=>{cart.obs=$('#obTxt').value.replace(/\s+$/,'').slice(0,300);closeModals();renderCart();if(screen==='pagamento'){renderPay();$('#valor').focus()}else focusScan()};
+$('#mObs').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('#obOk').click()}});
+$('#dsPct').oninput=()=>{$('#dsVal').value='';dsInfo()};$('#dsVal').oninput=()=>{$('#dsPct').value='';dsInfo()};
+$('#dsOk').onclick=()=>{cart.descPct=Math.min(100,parseBR($('#dsPct').value)/100);cart.descVal=Math.min(parseBR($('#dsVal').value),bruto());if(cart.descVal)cart.descPct=0;cart.pagamentos=[];closeModals();renderCart();if(screen==='pagamento'){renderPay();setVal(total());$('#valor').focus()}else focusScan()};
 $('#mDesc').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#dsOk').click()}});
 
 /* ================= leitor de código e busca ================= */
@@ -863,7 +906,7 @@ function renderPay(){
   renderFormas();
   const tot=total(),pg=pago(),falta=Math.max(0,tot-pg),troco=Math.max(0,pg-tot);
   $('#plist').innerHTML='<div class="head"><span>Forma de pagamento</span><span>Valor</span></div>'+(cart.pagamentos.length?cart.pagamentos.map((p,i)=>`<div class="p"><span>${esc(p.nome)}</span><span class="num">${R$(p.valor)} <button data-rp="${i}" aria-label="Remover pagamento">×</button></span></div>`).join(''):'<div class="nada"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 14H4v-6h16zm0-10H4V6h16z"/></svg>Nenhum pagamento adicionado</div>');
-  $('#pProdLbl').textContent='Produtos ('+fqs(nItens())+')';$('#pProd').textContent=R$(semDesc());$('#pDesc').textContent=descPctTotal().toFixed(2)+'%';
+  $('#pProdLbl').textContent='Produtos ('+fqs(nItens())+')';$('#pProd').textContent=R$(semDesc());renderExtras();
   $('#pTot').textContent=R$(tot);$('#pRec').textContent=R$(pg);$('#pFalta').textContent=R$(falta);$('#pTroco').textContent=R$(troco);
   $('#btnTotal').innerHTML=`Receber valor total (${R$(falta)})<small>(INSERT)</small>`;$('#btnTotal').hidden=falta<=0;
   const ok=cart.itens.length>0&&cart.pagamentos.length>0&&falta<=0;$('#btnFin').disabled=!ok;$('#btnFin').classList.toggle('on',ok);
@@ -884,7 +927,7 @@ async function finalizarComCaixa(){
     const pags=PdvMoney.pagamentos(cart.pagamentos,tot,CAT.formas);
     const venda={id:uid(),caixaSessaoId:PdvCaixa.aberto.id,usuarioId:PdvCaixa.usuario.id,numero:await nextNumero(),criadaEm:new Date().toISOString(),dia:today(),caixa:CFG.caixa,operador:PdvCaixa.usuario.nome,vendedorId:CFG.vendedorId||null,
       cliente:cart.cliente?{id:cart.cliente.id,nome:cart.cliente.nome,fantasia:cart.cliente.fantasia||'',documento:cart.cliente.documento||''}:null,
-      cpf:cart.cpf||'',itens:cart.itens.map(i=>({...i,total:itemTotal(i)})),subtotal:semDesc(),desconto:semDesc()-tot,total:tot,
+      cpf:cart.cpf||'',itens:cart.itens.map(i=>({...i,total:itemTotal(i)})),subtotal:semDesc(),desconto:descTotal(),taxaEntrega:taxaEnt(),obs:(cart.obs||'').trim(),total:tot,
       pagamentos:pags,recebido:pg,troco:Math.max(0,pg-tot),
       status:CFG.url?'pendente':'demo',tentativas:0,erro:'',bling:null,fiscal:{modo:CFG.fiscal,status:'sem_nota'}};
     await DB.put('vendas',venda);
@@ -895,7 +938,7 @@ async function finalizarComCaixa(){
 }
 $('#btnFin').onclick=finalizar;
 function clearSale(keep){cart=newCart();selRow=-1;$('#busca').value='';$('#scan').value='';syncCpf('');setVal(0);renderNames();renderProds();renderCart();if(!keep)focusScan()}
-async function saveDraft(){try{await DB.put('meta',{id:'draft',v:{itens:cart.itens,cliente:cart.cliente,cpf:cart.cpf,descPct:cart.descPct,descVal:cart.descVal}})}catch(e){}}
+async function saveDraft(){try{await DB.put('meta',{id:'draft',v:{itens:cart.itens,cliente:cart.cliente,cpf:cart.cpf,descPct:cart.descPct,descVal:cart.descVal,taxa:cart.taxa||0,obs:cart.obs||''}})}catch(e){}}
 async function loadDraft(){const d=await DB.get('meta','draft');if(d&&d.v&&d.v.itens&&d.v.itens.length){Object.assign(cart,d.v);syncCpf(cart.cpf||'');renderNames();toast('Venda em andamento recuperada');return true}return false}
 
 /* ================= comprovante ================= */
@@ -910,9 +953,11 @@ function receiptHTML(v){
   <div class="sep"></div>${itens}<div class="sep"></div>
   <div class="ln"><span>Subtotal</span><span>${fmt(v.subtotal)}</span></div>
   ${v.desconto?`<div class="ln"><span>Desconto</span><span>-${fmt(v.desconto)}</span></div>`:''}
+  ${v.taxaEntrega?`<div class="ln"><span>Taxa de entrega</span><span>+${fmt(v.taxaEntrega)}</span></div>`:''}
   <div class="tot"><span>TOTAL</span><span>R$ ${fmt(v.total)}</span></div>
   ${v.pagamentos.map(p=>`<div class="ln"><span>${esc(p.nome)}</span><span>${fmt(p.valor)}</span></div>`).join('')}
   ${v.troco?`<div class="ln"><b>Troco</b><b>${fmt(v.troco)}</b></div>`:''}
+  ${v.obs?`<div class="sep"></div><div class="obs"><b>OBSERVAÇÃO:</b><br>${esc(v.obs).replace(/\n/g,'<br>')}</div>`:''}
   <div class="sep"></div>
   <div class="c sm">${v.fiscal&&v.fiscal.status==='autorizada'?'NFC-e '+esc(v.fiscal.numero||''):'NÃO É DOCUMENTO FISCAL'}</div>
   <div class="c sm" style="margin-top:4px">${esc(CFG.rodape||'')}</div>`;
@@ -997,7 +1042,7 @@ const Sync={
         try{
           const j=await this.req('venda',{venda:{id:v.id,revisao:v.revisao||0,caixaSessaoId:v.caixaSessaoId,anteriorAoCaixa:!!v.anteriorAoCaixa,operadorOriginal:v.operadorOriginal,caixa:v.caixa,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
             itens:v.itens.map(i=>({produtoId:i.produtoId,codigo:i.codigo,nome:i.nome,unidade:i.unidade,qtd:i.qtd,valor:i.preco/100,precoOriginal:(i.precoOriginal??i.preco)/100,descontoPct:i.descPct||0})),
-            desconto:(v.subtotal-v.total)/100,total:v.total/100,pagamentos:v.pagamentos.map(p=>({formaId:p.formaId,valor:p.valorLiquido/100})),fiscal:v.fiscal.modo}});
+            desconto:(v.subtotal-v.total+(v.taxaEntrega||0))/100,taxaEntrega:(v.taxaEntrega||0)/100,obs:v.obs||'',total:v.total/100,pagamentos:v.pagamentos.map(p=>({formaId:p.formaId,valor:p.valorLiquido/100})),fiscal:v.fiscal.modo}});
           v.status='enviada';v.erro='';v.bling={pedidoId:j.pedidoId,numero:j.numero};
         }catch(e){v.status='erro';v.erro=String(e.message||e);v.tentativas++;
           // número repetido (ex.: PDV aberto em outro navegador/perfil começou a contagem do zero): pula a numeração e reenvia com número novo
@@ -1121,6 +1166,9 @@ document.addEventListener('keydown',e=>{
   if(screen==='balcao'){
     if(e.key==='F2'){e.preventDefault();$('#btnPagar').click()}
     else if(e.key==='F6'){e.preventDefault();$('#cpf').focus()}
+    else if(e.key==='F4'){e.preventDefault();abrirDesconto()}
+    else if(e.key==='F7'){e.preventDefault();abrirTaxa()}
+    else if(e.key==='F10'){e.preventDefault();abrirObs()}
     else if(e.key==='F8'){e.preventDefault();pickCliente()}
     else if(e.key==='F9'){e.preventDefault();pickVendedor()}
     else if(e.key==='F3'){e.preventDefault();$('#busca').focus()}
