@@ -151,6 +151,10 @@ table.t{width:100%;border-collapse:collapse;background:var(--bg)}
 .cat-checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 12px}.cat-ck{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px;cursor:pointer}.cat-ck small{color:var(--muted)}
 .cat-share{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .rel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}.rel-card{padding:18px;display:flex;flex-direction:column;gap:10px}.rel-card h3{font-size:17px;color:var(--bar)}.rel-card p{color:var(--muted);font-size:14px;margin:0}.rel-info{font-size:13px;background:var(--page);border-radius:8px;padding:8px 10px}.rel-card>.btn{margin-top:auto}
+.fin-abas{display:flex;gap:4px;border-bottom:2px solid var(--line);margin:4px 0 14px;overflow-x:auto}.fin-abas button{padding:10px 14px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}.fin-abas button[aria-selected=true]{color:var(--blue-ink);border-color:var(--blue)}
+.fin-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}.fin-card{display:flex;gap:12px;align-items:center;padding:14px 16px}.fin-card>span{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}.fin-card small{display:block;color:var(--muted);font-size:13px}.fin-card b{font-size:20px;font-family:var(--fd)}
+.fin-filtros{display:flex;gap:2px;background:var(--page);border:1px solid var(--line);border-radius:10px;padding:3px;flex-wrap:wrap}.fin-filtros button{padding:7px 12px;border-radius:8px;font-weight:600;font-size:14px;color:var(--muted)}.fin-filtros button[aria-pressed=true]{background:var(--blue);color:#fff}
+.chip[aria-pressed=true]{background:var(--blue);color:#fff;border-color:var(--blue)}
 .rel-fmt{display:flex;gap:6px}.rel-fmt label{flex:1;display:flex;gap:6px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:14px;cursor:pointer}.rel-fmt label:has(input:checked){border-color:var(--blue);background:var(--sky);font-weight:600}
 .pr-lote{position:sticky;top:0;z-index:3;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;padding:10px 12px;background:var(--sky);border:1px solid #c5d7fc;border-radius:10px}.pr-lote span{flex:1;min-width:150px;font-weight:600;color:var(--blue-ink)}
 .pr-sw{position:relative;display:inline-block;vertical-align:middle;width:38px;height:22px;border-radius:999px;background:#cbd5e1;margin-right:6px;transition:background .15s}.pr-sw i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0003;transition:left .15s}.pr-sw.on{background:var(--green)}.pr-sw.on i{left:19px}.pr-sw:disabled{opacity:.5}
@@ -319,6 +323,7 @@ function api(acao,dados,quieto){
 }
 const falha=e=>toast(e.message||String(e));
 const ICON={
+  fin:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm2 3v2h14V9zm2 5v2h4v-2z"/></svg>',
   pdf:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm0 2.5L17.5 8H14zM8 13h2.5a1.5 1.5 0 0 1 0 3H9v2H8zm1 1v1h1.5a.5.5 0 0 0 0-1zm4-1h1.5a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H13zm1 1v3h.5a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1z"/></svg>',
   rel:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 12v2h2v-2zm4-4v6h2v-6zm4-4v10h2V7z"/></svg>',
   cart:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM1 2v2h2l3.6 7.6-1.4 2.4C5 14.3 5 14.6 5 15c0 1.1.9 2 2 2h12v-2H7.4l1.1-2h7.4c.8 0 1.4-.4 1.7-1l3.6-6.5A1 1 0 0 0 20 4H5.2l-.9-2z"/></svg>',
@@ -764,7 +769,7 @@ let VIEW='dashboard';
 function iniciarPainel(){
   if(ME.papel==='caixa'){location.href='/pdv/';return}const MOT=ME.papel==='motorista';if(MOT)VIEW='rotas';const OPR=OPER();if(OPR&&VIEW==='dashboard')VIEW='pedidos';
   const itens=MOT?[['rotas','Minhas rotas',ICON.rota]]:OPR?[['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes','Clientes',ICON.cli],['produtos','Produtos',ICON.prod],['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota],['catalogo','Catálogo PDF',ICON.pdf]]:[['dashboard','Dashboard',ICON.dash],['pedidos','Pedidos',ICON.ped],['novo','Novo pedido',ICON.novo],['clientes',ME.papel==='vendedor'?'Meus clientes':'Clientes',ICON.cli],['produtos','Produtos',ICON.prod],['catalogo','Catálogo PDF',ICON.pdf]]
-    .concat(GESTAO()?[['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota],['tabelas','Tabelas de preço',ICON.tab],['relatorios','Relatórios',ICON.rel],['usuarios','Usuários',ICON.usr],['config','Configurações',ICON.cfg]]:[]);
+    .concat(GESTAO()?[['estoque','Estoque',ICON.tab],['rotas','Rotas e entregas',ICON.rota],['tabelas','Tabelas de preço',ICON.tab],['financeiro','Financeiro',ICON.fin],['relatorios','Relatórios',ICON.rel],['usuarios','Usuários',ICON.usr],['config','Configurações',ICON.cfg]]:[]);
   $('#root').innerHTML=`<div class="mtop"><button id="mmenu" aria-label="Menu">${ICON.menu}</button><img src="${LOGO}" alt="Damião"><b style="font-family:var(--fd)" id="mtit"></b></div>
   <div class="adm"><aside class="side" id="side"><div class="top"><img src="${LOGO}" alt="Damião Burguer Shop"><div class="who"><b>${esc(ME.nome)}</b>${esc(ME.papelNome)}</div></div>
    <nav aria-label="Painel">${itens.map(([k,t,i])=>`<button data-v="${k}" aria-current="${k===VIEW}">${i}${t}</button>`).join('')}</nav>
@@ -782,7 +787,7 @@ function iniciarPainel(){
 function iniciarLojaEquipe(){ // equipe vê a loja com o preço padrão
   iniciarLoja().then(()=>{const h=$('.shop-h .wrap');const b=document.createElement('button');b.className='hbtn';b.innerHTML=ICON.dash+'<span>Voltar ao painel</span>';b.onclick=iniciarPainel;h.insertBefore(b,h.children[1])});
 }
-function abrirView(){if(VIEW!=='rotas')pararRastreio();$('#mtit').textContent=({rotas:'Rotas',dashboard:'Dashboard',pedidos:'Pedidos',novo:'Novo pedido',clientes:'Clientes',produtos:'Produtos',tabelas:'Tabelas de preço',usuarios:'Usuários',config:'Configurações',estoque:'Estoque',catalogo:'Catálogo PDF',relatorios:'Relatórios'})[VIEW];({estoque:vEstoque,rotas:vRotas,dashboard:vDashboard,pedidos:vPedidos,novo:vNovo,clientes:vClientes,produtos:vProdutos,tabelas:vTabelas,usuarios:vUsuarios,config:vConfig,catalogo:vCatalogo,relatorios:vRelatorios})[VIEW]()}
+function abrirView(){if(VIEW!=='rotas')pararRastreio();$('#mtit').textContent=({rotas:'Rotas',dashboard:'Dashboard',pedidos:'Pedidos',novo:'Novo pedido',clientes:'Clientes',produtos:'Produtos',tabelas:'Tabelas de preço',usuarios:'Usuários',config:'Configurações',estoque:'Estoque',catalogo:'Catálogo PDF',relatorios:'Relatórios',financeiro:'Financeiro'})[VIEW];({estoque:vEstoque,rotas:vRotas,dashboard:vDashboard,pedidos:vPedidos,novo:vNovo,clientes:vClientes,produtos:vProdutos,tabelas:vTabelas,usuarios:vUsuarios,config:vConfig,catalogo:vCatalogo,relatorios:vRelatorios,financeiro:vFinanceiro})[VIEW]()}
 const M=()=>$('#main');
 
 /* ---- dashboard ---- */
@@ -1072,6 +1077,118 @@ async function vRelatorios(){
   };
   $('#main').addEventListener('click',async e=>{const b=e.target.closest('[data-rel]');if(!b)return;const id=b.dataset.rel,fmt=$(`[name=f${id}]:checked`).value;b.disabled=true;const tx=b.textContent;b.textContent='Gerando…';
     try{const [nome,tit,cols,l]=await R[id]();await exportarTabela(nome,tit,cols,l,fmt);toast('Relatório exportado: '+l.length+' registro(s)')}catch(x){falha(x)}finally{b.disabled=false;b.textContent=tx}});
+}
+
+/* ---- Financeiro (títulos do Bling) ---- */
+let FIN_AUX=null,FIN_ABA='receber';
+async function vFinanceiro(){
+  M().innerHTML=`<div class="ph"><div><h1>Financeiro</h1><p>Títulos do Bling: o que entra e o que sai. Baixas e lançamentos feitos aqui vão direto para o Bling.</p></div></div>
+  <div class="fin-abas" role="tablist"><button role="tab" data-fa="receber">Títulos a receber</button><button role="tab" data-fa="pagar">Títulos a pagar</button><button role="tab" data-fa="formas">Formas de pagamento</button><button role="tab" data-fa="categorias">Categorias financeiras</button></div><div id="fincorpo"></div>`;
+  const abrir=a=>{FIN_ABA=a;$$('[data-fa]').forEach(b=>b.setAttribute('aria-selected',b.dataset.fa===a));(a==='formas'?finFormas:a==='categorias'?finCategorias:finTitulos)(a)};
+  $$('[data-fa]').forEach(b=>b.onclick=()=>abrir(b.dataset.fa));abrir(FIN_ABA);
+}
+const finAux=async(forcar)=>FIN_AUX&&!forcar?FIN_AUX:(FIN_AUX=await api('finAuxiliares',{}));
+const isoD=x=>new Date(x.getTime()-x.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const brD=s=>s?s.split('-').reverse().join('/'):'';
+async function finTitulos(tipo){
+  const R=tipo==='receber',hoje=new Date(),h=isoD(hoje);
+  let de=isoD(new Date(hoje.getFullYear(),hoje.getMonth()-1,1)),ate=isoD(new Date(hoje.getFullYear(),hoje.getMonth()+2,0)),filtro='todos',rapido='',busca='';
+  const C=$('#fincorpo');
+  C.innerHTML=`<div class="fin-cards" id="fcards"></div>
+   <div class="toolbar" style="justify-content:space-between;margin:14px 0 8px"><div class="fin-filtros" id="ffil">${[['todos','Todos'],['vencidos','Vencidos'],['avencer','A vencer'],['pagos',R?'Recebidos':'Pagos'],['cancelados','Cancelados']].map(([k,t])=>`<button data-f="${k}">${t}</button>`).join('')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${R?'':'<button class="btn sm" id="fnovo">Novo título a pagar</button>'}<button class="btn o sm" id="fexp">Exportar Excel</button></div></div>
+   <div class="toolbar" style="margin-bottom:10px"><span style="font-size:13px;color:var(--muted)">Vencimento:</span>${[['hoje','Hoje'],['7','Próx. 7 dias'],['mes','Este mês']].map(([k,t])=>`<button class="chip" data-r="${k}">${t}</button>`).join('')}
+    <label style="font-size:13px;display:flex;gap:6px;align-items:center">De <input type="date" class="inp" id="fde" value="${de}" style="width:150px"></label><label style="font-size:13px;display:flex;gap:6px;align-items:center">Até <input type="date" class="inp" id="fate" value="${ate}" style="width:150px"></label>
+    <input class="inp" id="fbusca" placeholder="${R?'Cliente':'Fornecedor'}, documento ou situação…" style="flex:1;min-width:200px"></div>
+   <div class="scroll" id="ftab"><div class="empty"><b>Carregando títulos do Bling…</b></div></div>`;
+  let L=[];
+  const carregar=async()=>{$('#ftab').innerHTML='<div class="empty"><b>Carregando títulos do Bling…</b></div>';try{L=await api('finTitulos',{tipo,de,ate})}catch(e){$('#ftab').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`;return}render()};
+  const venc=x=>x.vencimento&&x.vencimento<h&&x.aberto;
+  const render=()=>{
+    const ab=L.filter(x=>x.aberto),em30=isoD(new Date(hoje.getTime()+30*864e5)),soma=a=>a.reduce((s,x)=>s+(x.saldo!=null&&x.aberto?x.saldo:x.valor),0);
+    $('#fcards').innerHTML=[[R?'Total em aberto':'Total a pagar',soma(ab),'#fff1e6','#c2410c'],['A vencer · 30 dias',soma(ab.filter(x=>x.vencimento>=h&&x.vencimento<=em30)),'#e8efff','#1d4ed8'],['Vencidos',soma(ab.filter(venc)),'#fee2e2','#b91c1c'],[R?'Recebido no período':'Pago no período',soma(L.filter(x=>x.pago&&x.vencimento>=de&&x.vencimento<=ate)),'#dcfce7','#15803d']]
+      .map(([t,v,bg,c])=>`<div class="card fin-card"><span style="background:${bg};color:${c}">R$</span><div><small>${t}</small><b class="num">${R$(v)}</b></div></div>`).join('');
+    $$('#ffil [data-f]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.f===filtro));$$('[data-r]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.r===rapido));
+    const ws=norm(busca).split(/\s+/).filter(Boolean);
+    let v=L.filter(x=>filtro==='todos'?true:filtro==='vencidos'?venc(x):filtro==='avencer'?x.aberto&&x.vencimento>=h:filtro==='pagos'?x.pago:x.cancelado)
+      .filter(x=>filtro==='vencidos'||filtro==='avencer'&&!rapido||(x.vencimento>=de&&x.vencimento<=ate)||(filtro==='todos'&&venc(x)))
+      .filter(x=>ws.every(w=>norm(x.contato+' '+x.documento+' '+x.numero+' '+x.situacaoNome+' '+x.historico).includes(w)));
+    C.__vis=v;
+    $('#ftab').innerHTML=v.length?`<table class="t"><thead><tr><th>Vencimento</th><th>Título</th><th>${R?'Cliente':'Fornecedor'}</th><th class="r">Valor</th><th>Situação</th><th class="r">Ações</th></tr></thead><tbody>${v.map(x=>`<tr data-id="${x.id}"><td class="num">${brD(x.vencimento)}${venc(x)?'<div style="font-size:11px;color:#b91c1c">vencido</div>':''}</td><td>${esc(x.numero||'#'+x.id)}<div style="font-size:12px;color:var(--muted)">${esc((x.historico||'').slice(0,60))}</div></td><td><b>${esc(x.contato||'—')}</b><div style="font-size:12px;color:var(--muted)">${esc(x.documento)}</div></td><td class="r num">${R$(x.valor)}${x.saldo!=null&&x.aberto&&x.saldo!==x.valor?`<div style="font-size:11px;color:var(--muted)">saldo ${R$(x.saldo)}</div>`:''}</td><td><span class="pill ${x.cancelado?'p-bad':x.pago?'p-ok':venc(x)?'p-bad':'p-wait'}">${esc(venc(x)?'Vencido':x.situacaoNome)}</span></td><td class="r" style="white-space:nowrap">${x.aberto?`<button class="btn sm" data-baixar>${R?'Receber':'Pagar'}</button> `:''}${R&&x.aberto?'<button class="btn o sm" data-cobrar title="Cobrar no WhatsApp">WhatsApp</button> ':''}<button class="btn o sm" data-ver>Ver</button></td></tr>`).join('')}</tbody><tfoot><tr><td colspan="3"><b>${v.length} título(s)</b></td><td class="r num"><b>${R$(v.reduce((s,x)=>s+x.valor,0))}</b></td><td colspan="2"></td></tr></tfoot></table>`:'<div class="empty"><b>Nenhum título nesta visão</b>Mude o filtro ou o período de vencimento.</div>';
+  };
+  $('#ffil').onclick=e=>{const b=e.target.closest('[data-f]');if(b){filtro=b.dataset.f;render()}};
+  const per=(a,b)=>{de=a;ate=b;$('#fde').value=a;$('#fate').value=b;carregar()};
+  $$('[data-r]').forEach(b=>b.onclick=()=>{rapido=b.dataset.r;const d=new Date();if(rapido==='hoje')per(h,h);else if(rapido==='7')per(h,isoD(new Date(d.getTime()+7*864e5)));else per(isoD(new Date(d.getFullYear(),d.getMonth(),1)),isoD(new Date(d.getFullYear(),d.getMonth()+1,0)))});
+  $('#fde').onchange=$('#fate').onchange=()=>{rapido='';if($('#fde').value&&$('#fate').value){de=$('#fde').value;ate=$('#fate').value;carregar()}};
+  $('#fbusca').oninput=e=>{busca=e.target.value;render()};
+  $('#fexp').onclick=async()=>{try{await exportarTabela(R?'titulos_receber':'titulos_pagar',R?'Títulos a receber':'Títulos a pagar',[{k:'venc',t:'Vencimento',w:1},{k:'numero',t:'Título',w:1.2},{k:'contato',t:R?'Cliente':'Fornecedor',w:3},{k:'documento',t:'Documento',w:1.6},{k:'historico',t:'Histórico',w:3},{k:'valor',t:'Valor',w:1.1,m:1,soma:1},{k:'sit',t:'Situação',w:1.2}],(C.__vis||[]).map(x=>({...x,venc:brD(x.vencimento),sit:venc(x)?'Vencido':x.situacaoNome})),'xlsx')}catch(e){falha(e)}};
+  if(!R)$('#fnovo').onclick=()=>finNovoPagar(carregar);
+  $('#ftab').onclick=async e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const x=L.find(y=>y.id===tr.dataset.id);
+    if(e.target.closest('[data-baixar]'))return finBaixa(x,tipo,carregar);
+    if(e.target.closest('[data-cobrar]')){let tel=String(x.telefone||'').replace(/\D/g,'');if(tel&&!tel.startsWith('55'))tel='55'+tel;
+      const msg=`Olá, ${x.contato}! Aqui é da Damião Pães. Passando para lembrar do título ${x.numero||''} no valor de ${R$(x.saldo!=null?x.saldo:x.valor)}, com vencimento em ${brD(x.vencimento)}.${x.linkPix?'\nPIX: '+x.linkPix:''}${x.linkBoleto?'\nBoleto: '+x.linkBoleto:''}\nQualquer dúvida, estamos à disposição.`;
+      window.open('https://wa.me/'+(tel.length>=12?tel:'')+'?text='+encodeURIComponent(msg),'_blank');if(!tel)toast('Cliente sem telefone no App: escolha o contato no WhatsApp.');return}
+    if(e.target.closest('[data-ver]')){try{const dt=await api('finDetalhe',{tipo,id:x.id});const b=dt.bruto||{};
+      modal(`<header><h3>Título ${esc(dt.numero||'#'+dt.id)}</h3><button data-fechar>×</button></header><div class="body"><div class="grid2">
+       ${[[R?'Cliente':'Fornecedor',dt.contato||x.contato],['Documento',dt.documento||x.documento],['Emissão',brD(dt.emissao)],['Vencimento',brD(dt.vencimento)],['Valor',R$(dt.valor)],['Saldo',dt.saldo!=null?R$(dt.saldo):'—'],['Situação',dt.situacaoNome],['Competência',brD(b.competencia||'')],['Histórico',dt.historico],['Origem',b.origem&&b.origem.tipoOrigem?b.origem.tipoOrigem+' '+(b.origem.numero||''):'']].map(([k,v])=>`<div class="field"><label>${k}</label><div style="padding:8px 0">${esc(v||'—')}</div></div>`).join('')}</div>
+       ${dt.linkBoleto?`<a class="btn o sm" target="_blank" rel="noopener" href="${esc(dt.linkBoleto)}">Abrir boleto</a>`:''}</div>`,{wide:true})}catch(e){falha(e)}}
+  };
+  carregar();
+}
+async function finBaixa(x,tipo,depois){
+  const R=tipo==='receber';let aux;try{aux=await finAux()}catch(e){falha(e);return}
+  const cat=aux.categorias.filter(c=>!c.tipo||c.tipo===(R?1:2));
+  const m=modal(`<header><h3>${R?'Receber':'Pagar'} título ${esc(x.numero||'#'+x.id)}</h3><button data-fechar>×</button></header><div class="body">
+   <p style="margin:0 0 10px"><b>${esc(x.contato)}</b> · vencimento ${brD(x.vencimento)} · valor ${R$(x.valor)}</p><div class="grid2">
+   <div class="field"><label for="bxd">Data ${R?'do recebimento':'do pagamento'}</label><input type="date" id="bxd" value="${isoD(new Date())}"></div>
+   <div class="field"><label for="bxv">Valor ${R?'recebido':'pago'} (R$)</label><input id="bxv" inputmode="decimal" value="${(x.saldo!=null?x.saldo:x.valor).toFixed(2).replace('.',',')}"></div>
+   <div class="field"><label for="bxj">Juros (R$)</label><input id="bxj" inputmode="decimal" value="0,00"></div>
+   <div class="field"><label for="bxds">Desconto (R$)</label><input id="bxds" inputmode="decimal" value="0,00"></div>
+   <div class="field"><label for="bxp">Conta / portador</label><select id="bxp">${aux.portadores.map(p=>`<option value="${esc(p.id)}">${esc(p.nome)}</option>`).join('')||'<option value="">Nenhuma conta no Bling</option>'}</select></div>
+   <div class="field"><label for="bxc">Categoria</label><select id="bxc"><option value="">Manter a do título</option>${cat.map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}</select></div></div>
+   <div class="field"><label for="bxh">Histórico</label><input id="bxh" value="${esc((R?'Recebido':'Pago')+' pelo App Damião')}"></div>
+   <p style="color:var(--muted);font-size:13px">A baixa é gravada direto no Bling. Valor menor que o saldo deixa o título como parcial.</p></div>
+   <footer><button class="btn" id="bxok">Confirmar ${R?'recebimento':'pagamento'}</button></footer>`);
+  const n=s=>Number(String(s).replace(/\./g,'').replace(',','.'))||0,q=s=>m.querySelector(s);
+  q('#bxok').onclick=async()=>{const b=q('#bxok');b.disabled=true;try{await api('finBaixar',{tipo,id:x.id,data:q('#bxd').value,valor:n(q('#bxv').value),juros:n(q('#bxj').value),desconto:n(q('#bxds').value),portadorId:q('#bxp').value,categoriaId:q('#bxc').value,historico:q('#bxh').value});toast(R?'Recebimento registrado no Bling':'Pagamento registrado no Bling');m.fechar();depois&&depois()}catch(e){b.disabled=false;falha(e)}};
+}
+async function finNovoPagar(depois){
+  let aux;try{aux=await finAux()}catch(e){falha(e);return}
+  const m=modal(`<header><h3>Novo título a pagar</h3><button data-fechar>×</button></header><div class="body">
+   <div class="field"><label for="npc">Fornecedor (contato do Bling)</label><input id="npc" list="npcl" placeholder="Digite o nome ou CNPJ" autocomplete="off"><datalist id="npcl">${aux.contatos.map(c=>`<option value="${esc(c.nome+(c.documento?' · '+c.documento:''))}">`).join('')}</datalist></div>
+   <div class="grid2"><div class="field"><label for="npv">Valor (R$)</label><input id="npv" inputmode="decimal" placeholder="0,00"></div>
+   <div class="field"><label for="npvc">Vencimento</label><input type="date" id="npvc" value="${isoD(new Date())}"></div>
+   <div class="field"><label for="npcp">Competência</label><input type="date" id="npcp" value="${isoD(new Date())}"></div>
+   <div class="field"><label for="npnd">Nº do documento</label><input id="npnd" placeholder="Ex.: NF 1234"></div>
+   <div class="field"><label for="npct">Categoria</label><select id="npct"><option value="">Sem categoria</option>${aux.categorias.filter(c=>!c.tipo||c.tipo===2).map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}</select></div>
+   <div class="field"><label for="npf">Forma de pagamento</label><select id="npf"><option value="">—</option>${aux.formas.filter(f=>f.situacao!==0).map(f=>`<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join('')}</select></div></div>
+   <div class="field"><label for="nph">Histórico</label><input id="nph" placeholder="Ex.: Compra de farinha"></div></div>
+   <footer><button class="btn" id="npok">Lançar no Bling</button></footer>`,{wide:true});
+  const q=s=>m.querySelector(s);
+  q('#npok').onclick=async()=>{const b=q('#npok');const sel=aux.contatos.find(c=>c.nome+(c.documento?' · '+c.documento:'')===q('#npc').value);if(!sel){toast('Escolha o fornecedor da lista. Se não existir, cadastre o contato no Bling.');return}
+    b.disabled=true;try{await api('finNovoPagar',{contatoId:sel.id,valor:Number(q('#npv').value.replace(/\./g,'').replace(',','.')),vencimento:q('#npvc').value,competencia:q('#npcp').value,numeroDocumento:q('#npnd').value,categoriaId:q('#npct').value,formaId:q('#npf').value,historico:q('#nph').value});toast('Título lançado no Bling');m.fechar();depois&&depois()}catch(e){b.disabled=false;falha(e)}};
+}
+async function finFormas(){
+  const C=$('#fincorpo');C.innerHTML='<div class="empty"><b>Carregando…</b></div>';let aux;try{aux=await finAux(true)}catch(e){falha(e);return}
+  C.innerHTML=`<div class="toolbar" style="justify-content:space-between;margin:12px 0"><p style="color:var(--muted);margin:0;font-size:14px">As formas de pagamento ficam no Bling e valem para o App, o PDV e os títulos.</p><button class="btn sm" id="fnf">Nova forma de pagamento</button></div>
+   <div class="scroll"><table class="t"><thead><tr><th>Descrição</th><th>Situação</th><th>Uso no App</th></tr></thead><tbody>${aux.formas.map(f=>`<tr><td><b>${esc(f.nome)}</b>${f.padrao?' <span class="pill p-info">padrão</span>':''}</td><td>${f.situacao===0?'<span class="pill p-bad">Inativa</span>':'<span class="pill p-ok">Ativa</span>'}</td><td style="font-size:13px;color:var(--muted)">${/dinheiro|pix/i.test(f.nome)?'Aviso de pagamento na entrega':'—'}</td></tr>`).join('')}</tbody></table></div>`;
+  $('#fnf').onclick=()=>{const m=modal(`<header><h3>Nova forma de pagamento</h3><button data-fechar>×</button></header><div class="body">
+    <div class="field"><label for="nfd">Descrição</label><input id="nfd" placeholder="Ex.: Boleto 28 dias"></div>
+    <div class="grid2"><div class="field"><label for="nft">Tipo</label><select id="nft">${[[1,'Dinheiro'],[17,'PIX'],[15,'Boleto'],[3,'Cartão de crédito'],[4,'Cartão de débito'],[2,'Cheque'],[5,'Crédito loja'],[99,'Outros']].map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>
+    <div class="field"><label for="nfc">Dias para pagamento</label><input id="nfc" placeholder="0 = à vista · 28 · 30 60 90"></div></div></div>
+    <footer><button class="btn" id="nfok">Criar no Bling</button></footer>`);
+   m.querySelector('#nfok').onclick=async()=>{try{await api('finNovaForma',{nome:m.querySelector('#nfd').value,tipoPagamento:m.querySelector('#nft').value,condicao:m.querySelector('#nfc').value});toast('Forma de pagamento criada no Bling');m.fechar();finFormas()}catch(e){falha(e)}}};
+}
+async function finCategorias(){
+  const C=$('#fincorpo');C.innerHTML='<div class="empty"><b>Carregando…</b></div>';let aux;try{aux=await finAux(true)}catch(e){falha(e);return}
+  const nome=id=>(aux.categorias.find(c=>c.id===id)||{}).nome||'';
+  C.innerHTML=`<div class="toolbar" style="justify-content:space-between;margin:12px 0"><p style="color:var(--muted);margin:0;font-size:14px">Categorias de receitas e despesas do Bling, usadas nos títulos.</p><button class="btn sm" id="fnc">Nova categoria</button></div>
+   <div class="grid2">${[[1,'Receitas'],[2,'Despesas']].map(([t,tt])=>`<div class="card" style="padding:14px"><h3 style="font-size:16px;margin-bottom:8px">${tt}</h3>${aux.categorias.filter(c=>c.tipo===t).map(c=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)${c.paiId?';padding-left:18px':''}">${esc(c.nome)}${c.paiId?` <small style="color:var(--muted)">em ${esc(nome(c.paiId))}</small>`:''}</div>`).join('')||'<p style="color:var(--muted)">Nenhuma.</p>'}</div>`).join('')}</div>`;
+  $('#fnc').onclick=()=>{const m=modal(`<header><h3>Nova categoria financeira</h3><button data-fechar>×</button></header><div class="body">
+    <div class="field"><label for="ncn">Nome</label><input id="ncn" placeholder="Ex.: Combustível"></div><div class="grid2"><div class="field"><label for="nct">Tipo</label><select id="nct"><option value="despesa">Despesa</option><option value="receita">Receita</option></select></div>
+    <div class="field"><label for="ncp">Dentro de</label><select id="ncp"><option value="">— (principal)</option>${aux.categorias.filter(c=>!c.paiId).map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}</select></div></div></div>
+    <footer><button class="btn" id="ncok">Criar no Bling</button></footer>`);
+   m.querySelector('#ncok').onclick=async()=>{try{await api('finNovaCategoria',{nome:m.querySelector('#ncn').value,tipo:m.querySelector('#nct').value,paiId:m.querySelector('#ncp').value});toast('Categoria criada no Bling');m.fechar();finCategorias()}catch(e){falha(e)}}};
 }
 
 /* ---- pedidos ---- */
