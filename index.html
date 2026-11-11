@@ -627,9 +627,12 @@ function detalhePedido(p,equipe,onChange){
    ${p.obs?`<div class="msg info">Obs.: ${esc(p.obs)}</div>`:''}
    ${equipe?`<div class="grid2" style="align-items:end"><div class="field"><label for="ps">Situação</label><select id="ps">${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue'].concat(OPER()?[]:['Cancelado']).map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}</select></div><button class="btn" id="psv">Salvar situação</button></div>
    ${!p.blingNumero?'<button class="btn y" id="pbl">Enviar ao Bling agora</button>':''}`:''}
-   ${equipe?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="pimp">Imprimir pedido</button>${podeEditarPedido()&&PED_EDITAVEL.includes(p.status)?'<button class="btn o" id="ped">Editar pedido</button>':''}</div>`:''}
+   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="ppdfv">Visualizar / imprimir PDF</button><button class="btn o" id="ppdfb">Baixar PDF</button>${equipe?'<button class="btn" id="ppdfw" style="background:#16a34a">Enviar no WhatsApp</button>':''}</div>
+   ${equipe?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="pimp">Imprimir na Elgin (térmica)</button>${podeEditarPedido()&&PED_EDITAVEL.includes(p.status)?'<button class="btn o" id="ped">Editar pedido</button>':''}</div>`:''}
   </div>`,{wide:true});
+  m.querySelector('#ppdfv').onclick=e=>pedidoPdfAcao(p,'ver',e.currentTarget);m.querySelector('#ppdfb').onclick=e=>pedidoPdfAcao(p,'baixar',e.currentTarget);
   if(equipe){
+    m.querySelector('#ppdfw').onclick=e=>pedidoPdfAcao(p,'whats',e.currentTarget);
     m.querySelector('#pimp').onclick=()=>imprimirPedido(p);
     const pe=m.querySelector('#ped');if(pe)pe.onclick=()=>{m.fechar();editarPedido(p,onChange)};
     m.querySelector('#psv').onclick=async()=>{try{await api('mudarStatusPedido',{id:p.id,status:m.querySelector('#ps').value});toast('Situação atualizada');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
@@ -815,6 +818,63 @@ async function vDashboard(){
     charts.push(new Chart($('#c2'),{type:'bar',data:{labels:d.ranking.map(r=>r.nome),datasets:[{label:'Semana',data:d.ranking.map(r=>r.semana),backgroundColor:'#f5d23e',borderRadius:4},{label:'Mês',data:d.ranking.map(r=>r.mes),backgroundColor:'#2563eb',borderRadius:4}]},options:{maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
     charts.push(new Chart($('#c3'),{type:'line',data:{labels:d.semanas.map(s=>s.slice(8)+'/'+s.slice(5,7)),datasets:d.series.map((s,i)=>({label:s.nome,data:s.valores,borderColor:cor[i%cor.length],backgroundColor:cor[i%cor.length],tension:.3,pointRadius:3}))},options:{maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
   }catch(e){if(body.isConnected)body.innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}
+}
+
+/* ---- PDF do pedido (mesmo modelo do Meu Ecomm) ---- */
+const _scr={};function carregarScript(u){return _scr[u]||(_scr[u]=new Promise((ok,no)=>{const s=document.createElement('script');s.src=u;s.onload=ok;s.onerror=()=>{delete _scr[u];no(Error('Sem internet para gerar o PDF. Tente de novo.'))};document.head.appendChild(s)}))}
+let FORMAS_PDF=null;
+async function pdfPedido(p){
+  await Promise.all([carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js')]);
+  if(!FORMAS_PDF){try{FORMAS_PDF=await api('formasPagamento',{},true)}catch(e){FORMAS_PDF=[]}}
+  const forma=(FORMAS_PDF.find(f=>String(f.id)===String(p.formaPagamentoId))||{}).nome||(p.formaPagamentoId?'':'A combinar');
+  const {jsPDF}=window.jspdf,d=new jsPDF({unit:'mm',format:'a4'});
+  const W=210,H=297,X=8,R=W-8,num=String(p.numero||'').padStart(6,'0');
+  const br=v=>'R$'+(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const dt=s=>{const x=new Date(s);return isNaN(x)?String(s||''):x.toLocaleDateString('pt-BR')+' '+x.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
+  const cx=(x,y,w,h)=>{d.setLineDashPattern([0.4,0.4],0);d.setLineWidth(0.15);d.setDrawColor(60);d.rect(x,y,w,h)};
+  const t=(s,x,y,o={})=>{d.setFont('helvetica',o.b?'bold':'normal');d.setFontSize(o.s||7.5);d.setTextColor(o.c||0);const tx=o.w?d.splitTextToSize(String(s??''),o.w):String(s??'');d.text(tx,x,y,{align:o.a||'left'});return Array.isArray(tx)?tx.length:1};
+  // cabeçalho: logo | empresa/cliente | data/endereço | código de barras/tipo
+  const y0=8,hA=17,hB=17,c1=X,c2=X+33,c3=X+118,c4=X+157;
+  cx(c1,y0,c2-c1,hA+hB);try{d.addImage(LOGO,'JPEG',c1+1,y0+1,c2-c1-2,hA+hB-2)}catch(e){}
+  cx(c2,y0,c3-c2,hA);t((LOJA.lojaRazao||'THE BROTHERS FOOD LTDA').toUpperCase(),c2+2,y0+9,{b:1,s:8});
+  cx(c3,y0,c4-c3,hA);t('Data do pedido:',c3+2,y0+6,{b:1,s:7});t(dt(p.data),c3+2,y0+10.5,{s:9});
+  cx(c4,y0,R-c4,hA);try{const cv=document.createElement('canvas');JsBarcode(cv,num,{format:'CODE128',displayValue:false,margin:0,height:40,width:2});d.addImage(cv.toDataURL('image/png'),'PNG',c4+4,y0+2,R-c4-8,8)}catch(e){}t(num,(c4+R)/2,y0+14,{b:1,s:10,a:'center'});
+  const yB=y0+hA;cx(c2,yB,c3-c2,hB);t('Cliente: '+(p.razao||p.cliente||''),c2+2,yB+6,{b:1,s:7.5,w:c3-c2-4});const doc=String(p.documento||'').replace(/\D/g,''),docF=doc.length===14?doc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):doc.length===11?doc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'):p.documento;if(doc)t('Documento: '+docF,c2+2,yB+13,{b:1,s:7.5});
+  cx(c3,yB,c4-c3,hB);t('End.: '+String(p.endereco||'').split(' - ')[0]+(p.cep?' '+String(p.cep).replace(/\D/g,''):''),c3+2,yB+4.5,{b:1,s:7,w:c4-c3-4});t('Bairro: '+((p.endereco||'').split(' - ')[1]||''),c3+2,yB+11,{b:1,s:7});t('Cidade: '+(p.cidade||'')+(p.uf?'/'+p.uf:''),c3+2,yB+14.8,{b:1,s:7});
+  cx(c4,yB,R-c4,hB);[['Tipo de ped.: ','Pedido de venda'],['Forma de pgto.: ',forma],['Vend.: ',p.vendedor||''],['Status: ',p.status||'']].forEach(([a,b],k)=>{d.setFontSize(6.6);t(d.splitTextToSize(a+b,R-c4-3)[0],c4+2,yB+4+k*3.6,{b:1,s:6.6})});
+  const yC=yB+hB;cx(c1,yC,c4-c1,6);t('Observação: '+(p.obs||''),c2+2,yC+4,{b:1,s:7,w:c4-c2-4});cx(c4,yC,R-c4,6);t('Ped. compra: '+(p.blingNumero?'Bling '+p.blingNumero:''),c4+2,yC+4,{b:1,s:7});
+  // itens
+  const cols=[['Cód.',16,'c'],['Descrição',88,'l'],['Qtd.',10,'c'],['UM',9,'c'],['Peso',9,'c'],['Desconto',14,'c'],['Valor un.',16,'r'],['Subtotal',R-X-162,'r']];
+  const cab=y=>{let x=X;cols.forEach(([n,w])=>{cx(x,y,w,4.5);t(n,x+w/2,y+3.3,{b:1,s:7,a:'center'});x+=w});return y+4.5};
+  let y=cab(yC+6);
+  (p.itens||[]).forEach(i=>{const desc=d.splitTextToSize(String(i.nome||''),cols[1][1]-3),h=Math.max(6,desc.length*3.4+2.6);
+    if(y+h>H-22){d.addPage();y=cab(10)}
+    const v=[i.codigo||'',desc,String(i.qtd??''),i.unidade||'UN',String(i.peso||0),((+i.descontoPct||0).toFixed(2).replace('.',','))+'%',br(i.preco),br(i.total)];
+    let x=X;cols.forEach(([n,w,a],k)=>{cx(x,y,w,h);if(k===2||k===7){d.setFillColor(240);d.rect(x+0.3,y+0.3,w-0.6,h-0.6,'F')}
+      const tx=a==='l'?x+1.5:a==='r'?x+w-1.5:x+w/2;t(v[k],tx,y+4,{s:7.5,b:k===2||k===7,a:a==='l'?'left':a==='r'?'right':'center'});x+=w});y+=h});
+  if(y+20>H-14){d.addPage();y=10}
+  const lin=(rot,val,big)=>{const h=big?7:6;cx(X,y,R-X-24,h);cx(R-24,y,24,h);if(big){d.setFillColor(240);d.rect(R-23.7,y+0.3,23.4,h-0.6,'F')}t(rot,R-26,y+(big?5:4),{b:1,s:big?9:7,a:'right'});t(val,R-1.5,y+(big?5:4),{b:1,s:big?9.5:7.5,a:'right'});y+=h};
+  const sub=(p.itens||[]).reduce((s,i)=>s+(+i.total||0),0);
+  lin('Subtotal dos Itens:',br(sub));if(+p.frete)lin('Frete:',br(p.frete));lin('TOTAL:',br(p.total),1);
+  const n=d.getNumberOfPages(),agora=new Date().toLocaleString('pt-BR').replace(',','');
+  for(let k=1;k<=n;k++){d.setPage(k);d.setLineDashPattern([],0);d.setLineWidth(0.3);d.setDrawColor(80);d.line(X,H-12,R,H-12);t('App Damião ::: Impressão de pedido em PDF ::: '+agora+' ::: '+k+' / '+n,R,H-8.5,{s:7,a:'right'})}
+  return d;
+}
+async function pedidoPdfAcao(p,acao,botao){
+  if(botao)botao.disabled=true;
+  try{const d=await pdfPedido(p),nome='pedido_'+String(p.numero||'').padStart(6,'0')+'.pdf';
+    if(acao==='baixar'){d.save(nome);return}
+    const blob=d.output('blob');
+    if(acao==='ver'){const u=URL.createObjectURL(blob),w=window.open(u,'_blank');if(!w){d.save(nome);toast('O navegador bloqueou a janela: o PDF foi baixado.')}setTimeout(()=>URL.revokeObjectURL(u),120000);return}
+    if(acao==='whats'){
+      const txt=`Olá${p.cliente?', '+p.cliente:''}! Segue o pedido nº ${p.numero} da Damião Pães. Total: ${R$(p.total)}.`;
+      const f=new File([blob],nome,{type:'application/pdf'});
+      if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],text:txt,title:'Pedido '+p.numero});return}catch(e){if(e&&e.name==='AbortError')return}}
+      d.save(nome);let tel=String(p.telefone||'').replace(/\D/g,'');if(tel&&!tel.startsWith('55'))tel='55'+tel;
+      window.open('https://wa.me/'+(tel.length>=12?tel:'')+'?text='+encodeURIComponent(txt),'_blank');
+      toast('PDF baixado. Na conversa do WhatsApp, clique no clipe e anexe o arquivo '+nome+'.');
+    }
+  }catch(e){falha(e)}finally{if(botao)botao.disabled=false}
 }
 
 /* ---- pedidos ---- */
