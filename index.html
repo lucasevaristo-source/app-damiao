@@ -144,6 +144,9 @@ table.t{width:100%;border-collapse:collapse;background:var(--bg)}
 .ph h1{font-size:24px}
 .ph p{margin:4px 0 0;color:var(--muted);font-size:14px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pr-lote{position:sticky;top:0;z-index:3;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;padding:10px 12px;background:var(--sky);border:1px solid #c5d7fc;border-radius:10px}.pr-lote span{flex:1;min-width:150px;font-weight:600;color:var(--blue-ink)}
+.pr-sw{position:relative;display:inline-block;vertical-align:middle;width:38px;height:22px;border-radius:999px;background:#cbd5e1;margin-right:6px;transition:background .15s}.pr-sw i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0003;transition:left .15s}.pr-sw.on{background:var(--green)}.pr-sw.on i{left:19px}.pr-sw:disabled{opacity:.5}
+tr.sel td{background:#f4f7ff}
 .toolbar .inp{width:auto;flex:1;min-width:180px}
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .kpi{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px}
@@ -1063,32 +1066,61 @@ function editarCliente(c){
 
 /* ---- produtos ---- */
 async function vProdutos(){
-  const g=GESTAO();
-  M().innerHTML=`<div class="ph"><div><h1>Produtos</h1><p>Vêm do Bling (atualização automática a cada hora). ${g?'Aqui você organiza como aparecem na loja.':''}</p></div>${g?'<button class="btn o sm" id="pat">Atualizar do Bling agora</button>':''}</div>
-  <div class="toolbar"><input class="inp" id="pb2" placeholder="Buscar produto" aria-label="Buscar"><select class="inp" id="pc2" style="flex:0 0 220px" aria-label="Categoria"></select></div><div class="scroll" id="ptab"><div class="empty"><b>Carregando…</b></div></div>`;
+  const g=GESTAO(),mst=ME&&ME.papel==='master';
+  M().innerHTML=`<div class="ph"><div><h1>Produtos</h1><p>Vêm do Bling (atualização automática). ${g?'Clique no produto para editar. Marque vários para pausar ou mostrar na loja de uma vez.':''}</p></div>${g?'<button class="btn o sm" id="pat">Atualizar do Bling agora</button>':''}</div>
+  <div class="toolbar"><input class="inp" id="pb2" placeholder="Buscar produto ou código" aria-label="Buscar"><select class="inp" id="pc2" style="flex:0 0 200px" aria-label="Categoria"></select><select class="inp" id="ps2" style="flex:0 0 170px" aria-label="Status na loja"><option value="">Todos os status</option><option value="v">Na loja</option><option value="o">Pausados</option><option value="s">Sem preço</option></select></div>
+  ${g?`<div class="pr-lote" id="plote" hidden><span id="plqtd">0 selecionados</span><button class="btn sm" id="plpausa">Pausar na loja</button><button class="btn o sm" id="plmostra">Mostrar na loja</button><button class="btn o sm" id="pllimpa">Limpar seleção</button></div>`:''}
+  <div class="scroll" id="ptab"><div class="empty"><b>Carregando…</b></div></div>`;
   let cat;try{[cat]=await Promise.all([api('produtosPainel',{},true),carregarFotos()]);cat.produtos.forEach(p=>p.imagem=fotoProduto(p))}catch(e){falha(e);return}
   $('#pc2').innerHTML='<option value="">Todas as categorias</option><option value="-">Sem categoria</option>'+cat.categorias.map(c=>`<option>${esc(c)}</option>`).join('');
-  const r=()=>{const ws=norm($('#pb2').value).split(/\s+/).filter(Boolean),fc=$('#pc2').value;const l=cat.produtos.filter(p=>ws.every(w=>norm(p.nome+' '+p.codigo).includes(w))&&(!fc||(fc==='-'?!p.categoria:p.categoria===fc)));
-    $('#ptab').innerHTML=`<table class="t"><thead><tr><th></th><th>Produto</th><th>Categoria</th><th class="r">Preço Bling</th><th>Na loja</th></tr></thead><tbody>${l.map(p=>`<tr class="${g?'click':''}" data-id="${p.id}"><td style="width:52px">${p.imagem?`<img src="${esc(p.imagem)}" alt="" style="width:40px;height:40px;object-fit:contain;border-radius:6px;background:#fff">`:'<span style="display:block;width:40px;height:40px">'+ICON.pao+'</span>'}</td><td><b>${esc(p.nome)}</b><div style="font-size:12px;color:var(--muted)">${esc(p.codigo)}${p.marca?' · '+esc(p.marca):''}</div></td><td>${esc(p.categoria||'—')}</td><td class="r num">${R$(p.precoBase)}</td><td>${p.oculto?'<span class="pill p-bad">Oculto</span>':p.precoBase>0?'<span class="pill p-ok">Visível</span>':'<span class="pill p-wait">Sem preço</span>'}${p.destaque?' <span class="pill p-wait">★</span>':''}</td></tr>`).join('')}</tbody></table>`};
-  $('#pb2').oninput=r;$('#pc2').onchange=r;r();
-  if(g){
-    $('#pat').onclick=async()=>{try{const n=await api('atualizarCatalogoAgora');toast(n+' produtos atualizados');vProdutos()}catch(x){falha(x)}};
-    $('#ptab').onclick=e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const p=cat.produtos.find(x=>x.id===tr.dataset.id);
-      const m=modal(`<header><h3>Editar produto</h3><button data-fechar aria-label="Fechar">×</button></header><div class="body">
-       <section><h4>Dados do produto</h4><div class="grid2">
-       <div class="field"><label for="qcodigo">Código</label><input id="qcodigo" readonly value="${esc(p.codigo||'')}"></div>
-       <div class="field"><label for="qnome">Nome no Bling</label><input id="qnome" readonly value="${esc(p.nome||'')}"></div>
-       </div><div class="field"><label for="q6">Descrição na loja</label><textarea id="q6">${esc(p.descricao)}</textarea></div></section>
-       <section><h4>Imagem do produto</h4>${p.imagem?`<img src="${esc(p.imagem)}" alt="Imagem de ${esc(p.nome)}" style="width:96px;height:96px;object-fit:contain">`:'<p>Sem imagem cadastrada.</p>'}</section>
-       <section><h4>Preços</h4><div class="field"><label for="qpreco">Preço base do Bling</label><input id="qpreco" readonly value="${esc(R$(p.precoBase))}"></div></section>
-       <section><h4>Organização na loja</h4><div class="grid2">
-       <div class="field"><label for="q1">Categoria</label><input id="q1" list="qcl" value="${esc(p.categoria)}"><datalist id="qcl">${cat.categorias.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
-       <div class="field"><label for="q2">Marca</label><input id="q2" value="${esc(p.marca)}"></div>
-       <div class="field"><label for="q3">Ordem na loja</label><input id="q3" inputmode="numeric" value="${p.ordem===999?'':p.ordem}"></div>
-       <div class="field"><label>Opções</label><label style="display:flex;gap:8px;align-items:center;height:42px"><input type="checkbox" id="q4" ${p.destaque?'checked':''}> Destaque</label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="q5" ${p.oculto?'checked':''}> Esconder da loja</label></div></div></section>
-       </div><footer><button class="btn" id="qsv">Salvar produto</button></footer>`,{wide:true});
-      m.querySelector('#qsv').onclick=async()=>{try{await api('salvarProdutoLoja',{produtoId:p.id,categoria:m.querySelector('#q1').value.trim(),marca:m.querySelector('#q2').value.trim(),ordem:m.querySelector('#q3').value,destaque:m.querySelector('#q4').checked?'sim':'',oculto:m.querySelector('#q5').checked?'sim':'',descricao:m.querySelector('#q6').value});toast('Produto atualizado');m.fechar();vProdutos()}catch(x){falha(x)}};
-    }}
+  const sel=new Set();let vis=[];
+  const status=p=>p.oculto?'<span class="pill p-bad">Pausado</span>':p.precoBase>0?'<span class="pill p-ok">Na loja</span>':'<span class="pill p-wait">Sem preço</span>';
+  const r=()=>{const ws=norm($('#pb2').value).split(/\s+/).filter(Boolean),fc=$('#pc2').value,fs=$('#ps2').value;
+    vis=cat.produtos.filter(p=>ws.every(w=>norm(p.nome+' '+p.codigo+' '+(p.gtin||'')).includes(w))&&(!fc||(fc==='-'?!p.categoria:p.categoria===fc))&&(!fs||(fs==='o'?p.oculto:fs==='v'?!p.oculto&&p.precoBase>0:!(p.precoBase>0))));
+    const todos=vis.length&&vis.every(p=>sel.has(p.id));
+    $('#ptab').innerHTML=vis.length?`<table class="t"><thead><tr>${g?`<th style="width:34px"><input type="checkbox" id="pall" aria-label="Selecionar todos os ${vis.length} produtos da lista" ${todos?'checked':''}></th>`:''}<th></th><th>Produto</th><th>Categoria</th><th class="r">Preço Bling</th><th>Na loja</th></tr></thead><tbody>${vis.map(p=>`<tr class="${g?'click':''}${sel.has(p.id)?' sel':''}" data-id="${p.id}">${g?`<td><input type="checkbox" data-ck aria-label="Selecionar ${esc(p.nome)}" ${sel.has(p.id)?'checked':''}></td>`:''}<td style="width:52px">${p.imagem?`<img src="${esc(p.imagem)}" alt="" style="width:40px;height:40px;object-fit:contain;border-radius:6px;background:#fff">`:'<span style="display:block;width:40px;height:40px">'+ICON.pao+'</span>'}</td><td><b>${esc(p.nome)}</b><div style="font-size:12px;color:var(--muted)">${esc(p.codigo)}${p.marca?' · '+esc(p.marca):''}</div></td><td>${esc(p.categoria||'—')}</td><td class="r num">${R$(p.precoBase)}</td><td>${g?`<button class="pr-sw${p.oculto?'':' on'}" data-sw role="switch" aria-checked="${!p.oculto}" aria-label="${esc(p.nome)} aparece na loja" title="${p.oculto?'Pausado: clique para mostrar na loja':'Na loja: clique para pausar'}"><i></i></button> `:''}${status(p)}${p.destaque?' <span class="pill p-wait">★</span>':''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum produto encontrado</b>Mude a busca ou os filtros.</div>';
+    if(g){$('#plote').hidden=!sel.size;$('#plqtd').textContent=sel.size+(sel.size===1?' produto selecionado':' produtos selecionados')}
+  };
+  $('#pb2').oninput=r;$('#pc2').onchange=r;$('#ps2').onchange=r;r();
+  if(!g)return;
+  const pausar=async(ids,oculto)=>{try{await api('pausarProdutos',{ids,oculto:oculto?'sim':''});ids.forEach(id=>{const p=cat.produtos.find(x=>x.id===id);if(p)p.oculto=oculto});toast(ids.length+(ids.length===1?' produto ':' produtos ')+(oculto?'pausado(s) na loja':'de volta na loja'));return true}catch(x){falha(x);return false}};
+  $('#plpausa').onclick=async()=>{if(await pausar([...sel],true)){sel.clear();r()}};
+  $('#plmostra').onclick=async()=>{if(await pausar([...sel],false)){sel.clear();r()}};
+  $('#pllimpa').onclick=()=>{sel.clear();r()};
+  $('#pat').onclick=async()=>{try{const n=await api('atualizarCatalogoAgora');toast(n+' produtos atualizados');vProdutos()}catch(x){falha(x)}};
+  $('#ptab').onclick=async e=>{
+    if(e.target.id==='pall'){vis.forEach(p=>e.target.checked?sel.add(p.id):sel.delete(p.id));r();return}
+    const tr=e.target.closest('tr[data-id]');if(!tr)return;const p=cat.produtos.find(x=>x.id===tr.dataset.id);
+    if(e.target.closest('[data-ck]')){e.target.checked?sel.add(p.id):sel.delete(p.id);r();return}
+    if(e.target.closest('td')&&e.target.closest('td').querySelector('[data-ck]')&&e.target.closest('td')===tr.firstElementChild){const c=tr.querySelector('[data-ck]');c.checked=!c.checked;c.checked?sel.add(p.id):sel.delete(p.id);r();return}
+    const sw=e.target.closest('[data-sw]');if(sw){sw.disabled=true;if(await pausar([p.id],!p.oculto))r();else sw.disabled=false;return}
+    const ro=mst?'':'readonly',dica=mst?'<p style="color:var(--muted);font-size:13px;margin:0 0 10px">Estes dados são gravados direto no cadastro do Bling e valem para o App e o PDV.</p>':'<p style="color:var(--muted);font-size:13px;margin:0 0 10px">Só o Master altera o cadastro do Bling.</p>';
+    const m=modal(`<header><h3>Editar produto</h3><button data-fechar aria-label="Fechar">×</button></header><div class="body">
+     <section><h4>Cadastro no Bling</h4>${dica}<div class="grid2">
+     <div class="field"><label for="qnome">Nome</label><input id="qnome" ${ro} maxlength="120" value="${esc(p.nomeBling||p.nome||'')}"></div>
+     <div class="field"><label for="qcodigo">Código</label><input id="qcodigo" ${ro} maxlength="60" value="${esc(p.codigo||'')}"></div>
+     <div class="field"><label for="qpreco">Preço de venda (R$)</label><input id="qpreco" ${ro} inputmode="decimal" value="${esc((+p.precoBase||0).toFixed(2).replace('.',','))}"></div>
+     <div class="field"><label for="qun">Unidade</label><input id="qun" ${ro} maxlength="6" value="${esc(p.unidade||'UN')}"></div>
+     <div class="field"><label for="qgtin">Código de barras (GTIN)</label><input id="qgtin" ${ro} inputmode="numeric" maxlength="14" value="${esc(p.gtin||'')}"></div>
+     </div></section>
+     <section><h4>Status na loja</h4><label style="display:flex;gap:10px;align-items:center;font-weight:600"><input type="checkbox" id="q5" ${p.oculto?'':'checked'}> Aparece na loja (desmarque para pausar)</label><p style="color:var(--muted);font-size:13px;margin:6px 0 0">Pausar só tira o produto da loja dos clientes. Ele continua no Bling e no PDV.</p></section>
+     <section><h4>Organização na loja</h4><div class="grid2">
+     <div class="field"><label for="q1">Categoria</label><input id="q1" list="qcl" value="${esc(p.categoria)}"><datalist id="qcl">${cat.categorias.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+     <div class="field"><label for="q2">Marca</label><input id="q2" value="${esc(p.marca)}"></div>
+     <div class="field"><label for="q3">Ordem na loja</label><input id="q3" inputmode="numeric" value="${p.ordem===999?'':p.ordem}"></div>
+     </div><label style="display:flex;gap:10px;align-items:center;font-weight:600;margin:4px 0 12px"><input type="checkbox" id="q4" ${p.destaque?'checked':''}> ★ Destaque na loja</label>
+     <div class="field"><label for="q6">Descrição na loja</label><textarea id="q6">${esc(p.descricao)}</textarea></div></section>
+     <section><h4>Imagem do produto</h4>${p.imagem?`<img src="${esc(p.imagem)}" alt="Imagem de ${esc(p.nome)}" style="width:96px;height:96px;object-fit:contain">`:'<p>Sem imagem cadastrada.</p>'}</section>
+     </div><footer><button class="btn" id="qsv">Salvar produto</button></footer>`,{wide:true});
+    const q=s=>m.querySelector(s);
+    q('#qsv').onclick=async()=>{const b=q('#qsv');b.disabled=true;try{
+      if(mst){const mud={},nome=q('#qnome').value.trim(),codigo=q('#qcodigo').value.trim(),un=q('#qun').value.trim().toUpperCase(),gtin=q('#qgtin').value.replace(/\D/g,''),preco=Number(q('#qpreco').value.replace(/\./g,'').replace(',','.'));
+        if(!isFinite(preco)||preco<0)throw Error('Preço inválido.');
+        if(nome!==(p.nomeBling||p.nome))mud.nome=nome;if(codigo!==(p.codigo||''))mud.codigo=codigo;if(un!==(p.unidade||'UN'))mud.unidade=un;if(gtin!==(p.gtin||''))mud.gtin=gtin;if(Math.round(preco*100)!==Math.round((+p.precoBase||0)*100))mud.preco=Math.round(preco*100)/100;
+        if(Object.keys(mud).length)await api('salvarProdutoBling',{produtoId:p.id,...mud});}
+      await api('salvarProdutoLoja',{produtoId:p.id,categoria:q('#q1').value.trim(),marca:q('#q2').value.trim(),ordem:q('#q3').value,destaque:q('#q4').checked?'sim':'',oculto:q('#q5').checked?'':'sim',descricao:q('#q6').value});
+      toast('Produto atualizado');m.fechar();vProdutos()}catch(x){b.disabled=false;falha(x)}};
+  };
 }
 
 /* ---- tabelas ---- */
