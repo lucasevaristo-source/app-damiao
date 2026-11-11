@@ -643,13 +643,14 @@ function detalhePedido(p,equipe,onChange){
    ${equipe?`<div class="grid2" style="align-items:end"><div class="field"><label for="ps">Situação</label><select id="ps">${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue'].concat(OPER()?[]:['Cancelado']).map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}</select></div><button class="btn" id="psv">Salvar situação</button></div>
    ${!p.blingNumero?'<button class="btn y" id="pbl">Enviar ao Bling agora</button>':''}`:''}
    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="ppdfv">Visualizar / imprimir PDF</button><button class="btn o" id="ppdfb">Baixar PDF</button>${equipe?'<button class="btn" id="ppdfw" style="background:#16a34a">Enviar no WhatsApp</button>':''}</div>
-   ${equipe?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="pimp">Imprimir na Elgin (térmica)</button>${podeEditarPedido()&&PED_EDITAVEL.includes(p.status)?'<button class="btn o" id="ped">Editar pedido</button>':''}</div>`:''}
+   ${equipe?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="pimp">Imprimir na Elgin (térmica)</button>${pedEditavel(p)?'<button class="btn o" id="ped">Editar pedido</button>':''}${GESTAO()&&p.status!=='Cancelado'?'<button class="btn o" id="pexc" style="color:var(--red);border-color:#f3b4b4">Excluir pedido</button>':''}</div>`:''}
   </div>`,{wide:true});
   m.querySelector('#ppdfv').onclick=e=>pedidoPdfAcao(p,'ver',e.currentTarget);m.querySelector('#ppdfb').onclick=e=>pedidoPdfAcao(p,'baixar',e.currentTarget);
   if(equipe){
     m.querySelector('#ppdfw').onclick=e=>pedidoPdfAcao(p,'whats',e.currentTarget);
     m.querySelector('#pimp').onclick=()=>imprimirPedido(p);
     const pe=m.querySelector('#ped');if(pe)pe.onclick=()=>{m.fechar();editarPedido(p,onChange)};
+    const px=m.querySelector('#pexc');if(px)px.onclick=()=>{m.fechar();excluirPedidos([p],onChange)};
     m.querySelector('#psv').onclick=async()=>{try{await api('mudarStatusPedido',{id:p.id,status:m.querySelector('#ps').value});toast('Situação atualizada');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
     const b=m.querySelector('#pbl');if(b)b.onclick=async()=>{try{await api('enviarPedidoBling',{id:p.id});toast('Pedido enviado ao Bling');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
   }
@@ -659,6 +660,23 @@ function detalhePedido(p,equipe,onChange){
 /* ---- pedido: imprimir e editar ---- */
 function podeEditarPedido(){return !!ME&&['master','admin','operacional','vendedor'].includes(ME.papel);}
 const PED_EDITAVEL=['Recebido','Em separação','Enviado ao Bling'];
+const pedEditavel=p=>podeEditarPedido()&&(PED_EDITAVEL.includes(p.status)||(ME.papel==='master'&&['Faturado','Em rota'].includes(p.status)));
+/* excluir pedidos: some do App e é cancelado no Bling (estorna estoque e contas). Master e Administrador. */
+function excluirPedidos(lista,depois){
+  lista=lista.filter(Boolean);if(!lista.length){toast('Selecione pelo menos um pedido.');return}
+  const m=modal(`<header><h3>Excluir ${lista.length===1?'pedido #'+esc(lista[0].numero):lista.length+' pedidos'}</h3><button data-fechar>×</button></header><div class="body">
+   <div class="msg bad"><b>Atenção:</b> ${lista.length===1?'o pedido sai':'os pedidos saem'} da lista do App e ${lista.length===1?'é cancelado':'são cancelados'} no Bling, com estorno de estoque e contas. Pedido com nota fiscal não é excluído.</div>
+   <div class="scroll" style="max-height:220px"><table class="t"><thead><tr><th>Pedido</th><th>Cliente</th><th>Situação</th><th class="r">Total</th></tr></thead><tbody>${lista.map(p=>`<tr><td>#${esc(p.numero)}</td><td>${esc(p.cliente||'')}</td><td>${esc(p.status)}</td><td class="r num">${R$(p.total)}</td></tr>`).join('')}</tbody></table></div>
+   <div class="field"><label for="exmot">Motivo da exclusão</label><textarea id="exmot" placeholder="Ex.: cliente desistiu, pedido duplicado"></textarea></div><div id="exres"></div></div>
+   <footer><button class="btn o" data-fechar>Voltar</button><button class="btn" id="exok" style="background:var(--red)">Excluir ${lista.length===1?'pedido':lista.length+' pedidos'}</button></footer>`,{wide:true,onClose:()=>{if(feito)depois&&depois()}});
+  let feito=false;const q=s=>m.querySelector(s);
+  q('#exok').onclick=async()=>{const mot=q('#exmot').value.trim();if(mot.length<3){toast('Escreva o motivo da exclusão.');q('#exmot').focus();return}
+    const b=q('#exok');b.disabled=true;const res=[];
+    try{for(let i=0;i<lista.length;i+=5){b.textContent='Excluindo… '+Math.min(i+5,lista.length)+'/'+lista.length;res.push(...await api('excluirPedidos',{ids:lista.slice(i,i+5).map(p=>String(p.id)),motivo:mot}))}}catch(e){falha(e)}
+    feito=res.some(r=>r.ok);const ok=res.filter(r=>r.ok),er=res.filter(r=>!r.ok);
+    q('#exres').innerHTML=`<div class="msg ${er.length?'bad':'ok'}" style="margin-top:10px"><b>${ok.length} excluído(s)${er.length?', '+er.length+' com problema':''}.</b>${er.map(r=>`<div>#${esc(r.numero)}: ${esc(r.erro)}</div>`).join('')}${ok.filter(r=>r.aviso).map(r=>`<div style="font-size:12px">#${esc(r.numero)} (${esc(r.aviso)})</div>`).join('')}</div>`;
+    b.hidden=true;if(!er.length){toast(ok.length+' pedido(s) excluído(s)');setTimeout(()=>m.fechar(),900)}};
+}
 /* ---- estoque (Operacional, Administrador e Master) ---- */
 async function vEstoque(){
   M().innerHTML=`<div class="ph"><div><h1>Estoque</h1><p>Saldo do Bling. Lance aqui as entradas de mercadoria conforme chegam; saídas e ajustes só no Bling.</p></div>
@@ -1207,19 +1225,20 @@ async function vPedidos(){
   const STATUS_PED=['Recebido','Em separação','Enviado ao Bling','Faturado','Em rota','Entregue','Cancelado'];
   M().innerHTML=`<div class="ph"><div><h1>Pedidos</h1><p>${ME.papel==='vendedor'?'Pedidos dos seus clientes':'Todos os pedidos do App'}</p></div><button class="btn" id="pn">${ICON.novo.replace('<svg','<svg width="18" height="18"')}Novo pedido</button></div>
     <div class="toolbar"><input class="inp" id="pb" placeholder="Buscar cliente, pedido ou cidade" aria-label="Buscar pedidos"><select class="inp" id="pf" style="flex:0 0 220px" aria-label="Situação do pedido"><option value="">Todas as situações</option>${STATUS_PED.map(s=>`<option>${esc(s)}</option>`).join('')}</select></div>
-    <div class="sel-bar"><b id="pselnumero">Nenhum pedido selecionado</b><button class="btn" id="pimprimir" disabled>Imprimir na Elgin i9</button><button class="btn o" id="plimpar" disabled>Limpar seleção</button><span style="font-size:12px">Papel 80 mm · escolha Elgin i9 na impressão</span></div>
+    <div class="sel-bar"><b id="pselnumero">Nenhum pedido selecionado</b><button class="btn" id="pimprimir" disabled>Imprimir na Elgin i9</button><button class="btn o" id="plimpar" disabled>Limpar seleção</button>${GESTAO()?'<button class="btn o" id="pexcluir" disabled style="color:var(--red);border-color:#f3b4b4">Excluir selecionados</button>':''}<span style="font-size:12px">Papel 80 mm · escolha Elgin i9 na impressão</span></div>
     <div class="scroll" id="pt"><div class="empty"><b>Carregando…</b></div></div>`;
   const selecionados=new Set();let visiveis=[];
-  const atualizarSelecao=()=>{const n=selecionados.size;$('#pselnumero').textContent=n?n+' pedido'+(n===1?' selecionado':'s selecionados'):'Nenhum pedido selecionado';$('#pimprimir').disabled=!n;$('#plimpar').disabled=!n;const all=$('#pall');if(all){all.checked=visiveis.length>0&&visiveis.every(p=>selecionados.has(String(p.id)));all.indeterminate=visiveis.some(p=>selecionados.has(String(p.id)))&&!all.checked;}};
+  const atualizarSelecao=()=>{const n=selecionados.size;$('#pselnumero').textContent=n?n+' pedido'+(n===1?' selecionado':'s selecionados'):'Nenhum pedido selecionado';$('#pimprimir').disabled=!n;$('#plimpar').disabled=!n;if($('#pexcluir'))$('#pexcluir').disabled=!n;const all=$('#pall');if(all){all.checked=visiveis.length>0&&visiveis.every(p=>selecionados.has(String(p.id)));all.indeterminate=visiveis.some(p=>selecionados.has(String(p.id)))&&!all.checked;}};
   const render=()=>{
     const q=norm($('#pb').value),f=$('#pf').value;
     visiveis=PEDS.filter(p=>(!f||p.status===f)&&(!q||norm(p.cliente+' '+p.numero+' '+p.cidade).includes(q)));
-    $('#pt').innerHTML=visiveis.length?`<table class="t"><thead><tr><th><input type="checkbox" class="chk" id="pall" aria-label="Selecionar todos os pedidos exibidos"></th><th>Pedido</th><th>Data</th><th>Cliente</th><th>Cidade</th>${ME.papel!=='vendedor'?'<th>Vendedor</th>':''}<th>Situação</th><th class="r">Total</th><th>Ações</th></tr></thead><tbody>${visiveis.map(p=>`<tr class="click" data-id="${esc(p.id)}"><td><input type="checkbox" class="chk" data-pedido="${esc(p.id)}" aria-label="Selecionar pedido ${esc(p.numero)}" ${selecionados.has(String(p.id))?'checked':''}></td><td class="num"><b>#${esc(p.numero)}</b></td><td>${dth(p.data)}</td><td>${esc(p.cliente)}</td><td>${esc(p.cidade)}</td>${ME.papel!=='vendedor'?`<td>${esc(p.vendedor||'—')}</td>`:''}<td>${pillStatus(p.status)}${p.erroBling?' <span class="pill p-bad">Erro Bling</span>':''}</td><td class="r num">${R$(p.total)}</td><td><button class="btn o sm" data-ver="${esc(p.id)}">Ver</button>${podeEditarPedido()&&PED_EDITAVEL.includes(p.status)?` <button class="btn o sm" data-editar-pedido="${esc(p.id)}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum pedido encontrado</b>Mude a busca ou a situação.</div>';
+    $('#pt').innerHTML=visiveis.length?`<table class="t"><thead><tr><th><input type="checkbox" class="chk" id="pall" aria-label="Selecionar todos os pedidos exibidos"></th><th>Pedido</th><th>Data</th><th>Cliente</th><th>Cidade</th>${ME.papel!=='vendedor'?'<th>Vendedor</th>':''}<th>Situação</th><th class="r">Total</th><th>Ações</th></tr></thead><tbody>${visiveis.map(p=>`<tr class="click" data-id="${esc(p.id)}"><td><input type="checkbox" class="chk" data-pedido="${esc(p.id)}" aria-label="Selecionar pedido ${esc(p.numero)}" ${selecionados.has(String(p.id))?'checked':''}></td><td class="num"><b>#${esc(p.numero)}</b></td><td>${dth(p.data)}</td><td>${esc(p.cliente)}</td><td>${esc(p.cidade)}</td>${ME.papel!=='vendedor'?`<td>${esc(p.vendedor||'—')}</td>`:''}<td>${pillStatus(p.status)}${p.erroBling?' <span class="pill p-bad">Erro Bling</span>':''}</td><td class="r num">${R$(p.total)}</td><td><button class="btn o sm" data-ver="${esc(p.id)}">Ver</button>${pedEditavel(p)?` <button class="btn o sm" data-editar-pedido="${esc(p.id)}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum pedido encontrado</b>Mude a busca ou a situação.</div>';
     atualizarSelecao();
   };
   $('#pn').onclick=()=>{VIEW='novo';iniciarPainel();};$('#pb').oninput=render;$('#pf').onchange=render;
   $('#plimpar').onclick=()=>{selecionados.clear();render();};
   $('#pimprimir').onclick=()=>imprimirPedidosSelecionados(PEDS.filter(p=>selecionados.has(String(p.id))));
+  if($('#pexcluir'))$('#pexcluir').onclick=()=>excluirPedidos(PEDS.filter(p=>selecionados.has(String(p.id))),()=>{selecionados.clear();vPedidos()});
   $('#pt').onchange=e=>{if(e.target.id==='pall'){visiveis.forEach(p=>e.target.checked?selecionados.add(String(p.id)):selecionados.delete(String(p.id)));render();}else if(e.target.dataset.pedido){e.target.checked?selecionados.add(e.target.dataset.pedido):selecionados.delete(e.target.dataset.pedido);atualizarSelecao();}};
   $('#pt').onclick=e=>{if(e.target.closest('input'))return;const ed=e.target.closest('[data-editar-pedido]'),tr=e.target.closest('tr[data-id]');if(!tr)return;const p=PEDS.find(p=>String(p.id)===tr.dataset.id);if(ed)editarPedido(p,vPedidos);else detalhePedido(p,true,vPedidos);};
   try{PEDS=await api('listarPedidos',{},true);render();}catch(e){$('#pt').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`;}
