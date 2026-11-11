@@ -1461,6 +1461,7 @@ async function vNovo(pedido=null,onChange=null){
   function filtrarProdutos(q){const ws=norm(q).split(/\s+/).filter(Boolean);return (cat?.produtos||[]).filter(p=>(!el('#npsaldo').checked||Number(p.estoque)>0)&&ws.every(w=>norm(p.nome+' '+p.codigo).includes(w)));}
   function buscarProduto(){
     selecionado=null;controles();el('#npprodutoselecionado').hidden=true;
+    if(!el('#npproduto').value.trim()){sugestoes=[];el('#npsugestoes').hidden=true;el('#npproduto').setAttribute('aria-expanded','false');return}
     sugestoes=filtrarProdutos(el('#npproduto').value).slice(0,12);ativo=0;
     el('#npsugestoes').innerHTML=sugestoes.length?sugestoes.map((p,n)=>`<button type="button" data-npp="${n}" class="np-sugestao ${n===ativo?'ativo':''}"><span><b>${esc(p.nome)}</b><small>${esc(p.codigo||'')} · Saldo ${p.estoque==null?'—':fmt(p.estoque)} ${esc(p.unidade||'')}</small></span><strong>${R$(p.preco)}</strong></button>`).join(''):'<div class="np-sem-resultado">Nenhum produto encontrado.</div>';
     el('#npsugestoes').hidden=false;el('#npproduto').setAttribute('aria-expanded','true');
@@ -1521,6 +1522,7 @@ async function vNovo(pedido=null,onChange=null){
     if(e.key==='Enter'){e.preventDefault();if(sugestoes.length&&!selecionado)escolherProduto(sugestoes[ativo]);}
   };
   el('#npsugestoes').onclick=e=>{const b=e.target.closest('[data-npp]');if(b)escolherProduto(sugestoes[+b.dataset.npp]);};
+  document.addEventListener('mousedown',e=>{const w=el('#npproduto')?.closest('.np-busca-wrap');if(w&&!w.contains(e.target)){el('#npsugestoes').hidden=true;el('#npproduto').setAttribute('aria-expanded','false')}});
   function adicionar(p,q){if(!p||!Number.isFinite(q)||q<=0||q>1000000){toast('Escolha o produto e informe uma quantidade maior que zero.');return}const i=draft.itens.find(i=>String(i.produtoId)===String(p.id));if(i)i.qtd+=q;else draft.itens.push({produtoId:String(p.id),nome:p.nome,codigo:p.codigo,unidade:p.unidade,preco:p.preco,precoTabela:p.preco,imagem:p.imagem,qtd:q});gravar();itens();limparProduto();el('#npproduto').focus();}
   el('#npadicionar').onsubmit=e=>{e.preventDefault();if(ocupado||draft.enviado)return;adicionar(selecionado,estoqueValor(el('#npquantidade').value));};
   const nbr=v=>{v=String(v||'').trim();if(v.includes(','))v=v.replace(/\./g,'').replace(',','.');const x=Number(v);return Number.isFinite(x)?x:NaN};
