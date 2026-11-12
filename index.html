@@ -1904,7 +1904,7 @@ function siglaAuto(n){let t=String(n||'').split(',')[0].replace(/\b(caixa|cx|pac
 /* uma etiqueta por caixa de cada produto, só um produto por etiqueta: 9 cx de HG + 5 cx de DG = 9 etiquetas "HG" e 5 "DG" ("Caixa 1 de 14") */
 const UN_CAIXA=/^(cx|cxs|caixa|caixas)\b/i;
 function produtosEtiqueta(itens){const m=new Map();(itens||[]).forEach(i=>{const s=String(i.sigla||siglaAuto(i.nome)).trim(),q=(+String(i.qtd).replace(',','.'))||0;if(!s||q<=0)return;const x=m.get(s)||{sigla:s,nome:i.nome,qtd:0,unidade:i.unidade||'',caixa:false};x.qtd+=q;if(UN_CAIXA.test(String(i.unidade||'').trim()))x.caixa=true;m.set(s,x)});
-  return [...m.values()].filter(x=>x.caixa).map(x=>({...x,n:Math.ceil(x.qtd)}))}
+  return [...m.values()].map(x=>({...x,n:x.caixa?Math.ceil(x.qtd):0}))}
 function etiquetaHTML(o){const s=o.sigla||'',tam=s.length<=8?'gg':s.length<=14?'g':s.length<=22?'m':'p';
   return `<div class="pr-lbl"><div class="t"><span class="ped">Pedido ${esc(o.numero)}</span><span>${esc(o.topo||'')}</span></div><div><div class="cli">${esc(o.cliente||'')}</div><div class="cid">${esc(o.cidade||'')}</div></div><div class="sg sg-${tam}"><span>${esc(s)}${o.qtdTxt?` <small>×${esc(o.qtdTxt)}</small>`:''}</span></div><div class="ft"><span style="font-size:9pt">Damião Pães</span><span class="cx">Caixa ${o.k} de ${o.n}</span></div></div>`}
 /* lista: [{numero,topo,cliente,cidade,itens}] — mostra produto por produto quantas etiquetas vão sair, permite corrigir e imprime */
@@ -1913,17 +1913,17 @@ async function janelaEtiquetas(lista){
   let porId={},porNome={};try{(await prcCat()).produtos.forEach(x=>{porId[String(x.id)]=x;porNome[norm(x.nome||'')]=x})}catch(e){}
   const completar=i=>{const c=porId[String(i.produtoId)]||porNome[norm(i.nome||'')]||{};return {...i,unidade:c.unidade||i.unidade||'',sigla:i.sigla||c.sigla||''}};
   const L=lista.map(p=>({...p,prods:produtosEtiqueta((p.itens||[]).map(completar))})).filter(p=>p.prods.length);
-  if(!L.length){toast('Nenhum produto em caixa (CX) nos pedidos escolhidos. Só produtos em caixa têm etiqueta.');return}
+  if(!L.length){toast('Os pedidos escolhidos não têm itens.');return}
   const m=modal(`<header><h3>Etiquetas das caixas</h3><button data-fechar>×</button></header><div class="body">
-   <p style="margin:0;color:var(--muted);font-size:14px">Só produtos vendidos em caixa (CX) têm etiqueta: uma por caixa, com só um produto em cada. Confira a quantidade de etiquetas de cada produto e corrija se precisar. Escolha a <b>impressora de etiquetas</b> na hora de imprimir.</p>
-   <div class="scroll" style="max-height:420px"><table class="t"><thead><tr><th>Pedido</th><th>Produto</th><th class="r">Pedido</th><th class="r" style="width:100px">Etiquetas</th></tr></thead><tbody>${L.map((p,pi)=>p.prods.map((x,xi)=>`<tr><td>${xi?'':`<b>#${esc(p.numero)}</b><div style="font-size:12px;color:var(--muted)">${esc(p.cliente||'')}</div>`}</td><td><b>${esc(x.sigla||'—')}</b><div style="font-size:12px;color:var(--muted)">${esc(x.nome||'')}</div></td><td class="r num">${String(x.qtd).replace('.',',')} ${esc(x.unidade)}</td><td class="r"><input class="inp num" data-en="${pi}-${xi}" inputmode="numeric" value="${x.n}" style="width:80px;text-align:right" aria-label="Etiquetas de ${esc(x.sigla)} no pedido ${esc(p.numero)}"></td></tr>`).join('')).join('')}</tbody></table></div>
+   <p style="margin:0;color:var(--muted);font-size:14px">Uma etiqueta por caixa, com só um produto em cada. Produtos em <b>CAIXA</b> já vêm com a quantidade preenchida; os outros vêm com 0 (não imprimem). Confira e corrija se precisar. Escolha a <b>impressora de etiquetas</b> na hora de imprimir.</p>
+   <div class="scroll" style="max-height:420px"><table class="t"><thead><tr><th>Pedido</th><th>Produto</th><th class="r">Qtd. / unidade</th><th class="r" style="width:100px">Etiquetas</th></tr></thead><tbody>${L.map((p,pi)=>p.prods.map((x,xi)=>`<tr><td>${xi?'':`<b>#${esc(p.numero)}</b><div style="font-size:12px;color:var(--muted)">${esc(p.cliente||'')}</div>`}</td><td><b>${esc(x.sigla||'—')}</b><div style="font-size:12px;color:var(--muted)">${esc(x.nome||'')}</div></td><td class="r num">${String(x.qtd).replace('.',',')} ${x.unidade?esc(x.unidade):'<span style="color:var(--red)">sem unidade</span>'}</td><td class="r"><input class="inp num" data-en="${pi}-${xi}" inputmode="numeric" value="${x.n}" style="width:80px;text-align:right" aria-label="Etiquetas de ${esc(x.sigla)} no pedido ${esc(p.numero)}"></td></tr>`).join('')).join('')}</tbody></table></div>
    <p style="margin:8px 0 0;font-weight:700">Total: <span id="ettot"></span> etiqueta(s)</p></div>
    <footer><button class="btn" id="etok">Imprimir etiquetas</button></footer>`,{wide:true});
   const ler=()=>{let t=0;m.querySelectorAll('[data-en]').forEach(e=>t+=Math.max(0,Math.min(200,parseInt(e.value)||0)));m.querySelector('#ettot').textContent=t;return t};
   m.querySelectorAll('[data-en]').forEach(e=>e.oninput=ler);ler();
   m.querySelector('#etok').onclick=()=>{let h='',tot=0;
     L.forEach((p,pi)=>{const prods=p.prods;const ns=prods.map((x,xi)=>Math.max(0,Math.min(200,parseInt(m.querySelector(`[data-en="${pi}-${xi}"]`).value)||0)));const N=ns.reduce((a,b)=>a+b,0);let k=0;
-      prods.forEach((x,xi)=>{const n=ns[xi],qt=(n===1&&x.qtd>1)?String(x.qtd).replace('.',','):'';for(let j=0;j<n;j++)h+=etiquetaHTML({numero:p.numero,topo:p.topo,cliente:p.cliente,cidade:p.cidade,sigla:x.sigla,qtdTxt:qt,k:++k,n:N})});tot+=N});
+      prods.forEach((x,xi)=>{const n=ns[xi];for(let j=0;j<n;j++)h+=etiquetaHTML({numero:p.numero,topo:p.topo,cliente:p.cliente,cidade:p.cidade,sigla:x.sigla,k:++k,n:N})});tot+=N});
     if(!tot){toast('Nenhuma etiqueta para imprimir.');return}
     m.fechar();imprimir(h,'size:100mm 60mm;margin:0');toast(tot+' etiqueta(s) enviadas para impressão')};
 }
