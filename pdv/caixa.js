@@ -34,7 +34,7 @@ const PdvCaixa=(()=>{
     }catch(x){bloquear(x.message);}finally{b.disabled=false;}};
     bloquear();
   }
-  async function semPendencias(){await Sync.enviar(true);const p=(await DB.all('vendas')).filter(v=>v.alteracaoPendente||v.status==='pendente'||v.status==='erro');if(p.length)throw Error('Existem '+p.length+' venda(s) sem confirmação no Bling. Envie ou resolva os erros antes de movimentar ou fechar o caixa.');}
+  async function semPendencias(){await Sync.enviar(true);const p=(await DB.all('vendas')).filter(v=>v.alteracaoPendente||v.status==='pendente'||v.status==='erro');if(p.length){const det=p.slice(0,5).map(v=>'nº '+v.numero+' ('+(v.alteracaoPendente?'correção não concluída: clique em Retomar correção':v.status==='erro'?'erro: '+String(v.erro||'sem detalhe').slice(0,120):!v.caixaSessaoId?'venda sem caixa vinculado: o Master precisa conferir':'aguardando envio')+')').join('; ');throw Error('Existem '+p.length+' venda(s) sem confirmação no Bling: '+det+'. Veja em Últimas vendas, resolva e tente de novo.');}}
   async function abrir(){
     await atualizar();const anteriores=(await DB.all('vendas')).filter(v=>!v.caixaSessaoId&&['pendente','erro','enviada'].includes(v.status)&&v.caixa===CFG.caixa);
     if(anteriores.length){
