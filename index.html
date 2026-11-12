@@ -1361,16 +1361,10 @@ async function prcUpsell(){
 }
 
 /* ---- etiquetas das caixas de um ou mais pedidos ---- */
-function etiquetasPedidos(lista){
+async function etiquetasPedidos(lista){
   lista=lista.filter(Boolean);if(!lista.length){toast('Selecione pelo menos um pedido.');return}
-  const m=modal(`<header><h3>Etiquetas das caixas</h3><button data-fechar>×</button></header><div class="body">
-   <p style="margin:0;color:var(--muted);font-size:14px">Etiqueta 100 × 60 mm, uma por caixa, com só um produto em cada (ex.: 9 cx de HG e 5 cx de DG = 9 etiquetas "HG" e 5 etiquetas "DG").</p>
-   <div class="scroll" style="max-height:320px"><table class="t"><thead><tr><th>Pedido</th><th>Cliente</th><th class="r" style="width:110px">Etiquetas</th></tr></thead><tbody>${lista.map(p=>{const n=caixasDosItens(p.itens).length;return `<tr><td>#${esc(p.numero)}</td><td>${esc(p.cliente||'')}<div style="font-size:12px;color:var(--muted)">${esc(p.cidade||'')}</div></td><td class="r num">${n||1}</td></tr>`}).join('')}</tbody></table></div></div>
-   <footer><button class="btn" id="etok">Imprimir etiquetas</button></footer>`,{wide:lista.length>1});
-  m.querySelector('#etok').onclick=async()=>{let h='',tot=0;const hoje=new Date().toLocaleDateString('pt-BR');let sig={};try{(await prcCat()).produtos.forEach(x=>{if(x.sigla)sig[x.id]=x.sigla})}catch(e){}
-    lista.forEach(p=>{const end=String(p.endereco||'').split(' - ')[0];
-      const e=etiquetasDoPedido({numero:p.numero,topo:hoje,cliente:p.cliente,cidade:[end,p.cidade].filter(Boolean).join(' · '),itens:(p.itens||[]).map(i=>({...i,sigla:sig[String(i.produtoId)]||i.sigla||''}))},p.caixas);h+=e.h;tot+=e.n});
-    m.fechar();imprimir(h,'size:100mm 60mm;margin:0');toast(tot+' etiqueta(s) enviadas para impressão')};
+  const hoje=new Date().toLocaleDateString('pt-BR');let sig={};try{(await prcCat()).produtos.forEach(x=>{if(x.sigla)sig[x.id]=x.sigla})}catch(e){}
+  janelaEtiquetas(lista.map(p=>{const end=String(p.endereco||'').split(' - ')[0];return {numero:p.numero,topo:hoje,cliente:p.cliente,cidade:[end,p.cidade].filter(Boolean).join(' · '),itens:(p.itens||[]).map(i=>({...i,sigla:sig[String(i.produtoId)]||i.sigla||''}))}}));
 }
 
 /* ---- pedidos ---- */
@@ -1907,15 +1901,30 @@ function mostrarRomaneio(r){
 function imprimir(html,pagina){$('#pageSize').textContent='@media print{@page{'+pagina+'}}';$('#printArea').innerHTML=html;setTimeout(()=>{try{window.print()}catch(e){toast('A impressão foi bloqueada pelo navegador')}},80)}
 /* nome curto do produto para etiqueta (cadastrado em Produtos; se vazio, resume o nome) */
 function siglaAuto(n){let t=String(n||'').split(',')[0].replace(/\b(caixa|cx|pacote|pct|c\/|com|und|unid|unidades|de|da|do)\b.*$/i,'').trim();return (t||String(n||'')).toUpperCase().slice(0,18).trim()}
-/* uma etiqueta por caixa de cada produto: 9 cx de HG + 5 cx de DG = 9 etiquetas "HG" e 5 etiquetas "DG" ("Caixa 1 de 14") */
-function caixasDosItens(itens){const m=new Map();(itens||[]).forEach(i=>{const s=String(i.sigla||siglaAuto(i.nome)).trim();const q=Math.ceil((+String(i.qtd).replace(',','.'))||0);if(s&&q>0)m.set(s,(m.get(s)||0)+q)});const l=[];m.forEach((q,s)=>{for(let k=0;k<q;k++)l.push(s)});return l}
+/* uma etiqueta por caixa de cada produto, só um produto por etiqueta: 9 cx de HG + 5 cx de DG = 9 etiquetas "HG" e 5 "DG" ("Caixa 1 de 14") */
+const UN_CAIXA=/^(cx|caixa|cxs|caixas|pct|pc|pacote|fd|fardo)\b/i;
+function produtosEtiqueta(itens){const m=new Map();(itens||[]).forEach(i=>{const s=String(i.sigla||siglaAuto(i.nome)).trim(),q=(+String(i.qtd).replace(',','.'))||0;if(!s||q<=0)return;const x=m.get(s)||{sigla:s,nome:i.nome,qtd:0,unidade:i.unidade||'',caixa:false};x.qtd+=q;if(UN_CAIXA.test(String(i.unidade||'').trim()))x.caixa=true;m.set(s,x)});
+  return [...m.values()].map(x=>({...x,n:x.caixa?Math.ceil(x.qtd):1}))}
 function etiquetaHTML(o){const s=o.sigla||'',tam=s.length<=8?'gg':s.length<=14?'g':s.length<=22?'m':'p';
-  return `<div class="pr-lbl"><div class="t"><span class="ped">Pedido ${esc(o.numero)}</span><span>${esc(o.topo||'')}</span></div><div><div class="cli">${esc(o.cliente||'')}</div><div class="cid">${esc(o.cidade||'')}</div></div><div class="sg sg-${tam}"><span>${esc(s)}</span></div><div class="ft"><span style="font-size:9pt">Damião Pães</span><span class="cx">Caixa ${o.k} de ${o.n}</span></div></div>`}
-function etiquetasDoPedido(o,caixasInformadas){const l=caixasDosItens(o.itens);if(!l.length){const n=Math.max(1,+caixasInformadas||1);let h='';for(let k=1;k<=n;k++)h+=etiquetaHTML({...o,sigla:'',k,n});return {h,n}}
-  return {h:l.map((sg,i)=>etiquetaHTML({...o,sigla:sg,k:i+1,n:l.length})).join(''),n:l.length}}
+  return `<div class="pr-lbl"><div class="t"><span class="ped">Pedido ${esc(o.numero)}</span><span>${esc(o.topo||'')}</span></div><div><div class="cli">${esc(o.cliente||'')}</div><div class="cid">${esc(o.cidade||'')}</div></div><div class="sg sg-${tam}"><span>${esc(s)}${o.qtdTxt?` <small>×${esc(o.qtdTxt)}</small>`:''}</span></div><div class="ft"><span style="font-size:9pt">Damião Pães</span><span class="cx">Caixa ${o.k} de ${o.n}</span></div></div>`}
+/* lista: [{numero,topo,cliente,cidade,itens}] — mostra produto por produto quantas etiquetas vão sair, permite corrigir e imprime */
+function janelaEtiquetas(lista){
+  const L=lista.map(p=>({...p,prods:produtosEtiqueta(p.itens)}));
+  const m=modal(`<header><h3>Etiquetas das caixas</h3><button data-fechar>×</button></header><div class="body">
+   <p style="margin:0;color:var(--muted);font-size:14px">Uma etiqueta por caixa, com só um produto em cada. Confira a quantidade de etiquetas de cada produto e corrija se precisar. Escolha a <b>impressora de etiquetas</b> na hora de imprimir.</p>
+   <div class="scroll" style="max-height:420px"><table class="t"><thead><tr><th>Pedido</th><th>Produto</th><th class="r">Pedido</th><th class="r" style="width:100px">Etiquetas</th></tr></thead><tbody>${L.map((p,pi)=>(p.prods.length?p.prods:[{sigla:'',nome:'(sem itens)',qtd:0,unidade:'',n:1}]).map((x,xi)=>`<tr><td>${xi?'':`<b>#${esc(p.numero)}</b><div style="font-size:12px;color:var(--muted)">${esc(p.cliente||'')}</div>`}</td><td><b>${esc(x.sigla||'—')}</b><div style="font-size:12px;color:var(--muted)">${esc(x.nome||'')}</div></td><td class="r num">${String(x.qtd).replace('.',',')} ${esc(x.unidade)}</td><td class="r"><input class="inp num" data-en="${pi}-${xi}" inputmode="numeric" value="${x.n}" style="width:80px;text-align:right" aria-label="Etiquetas de ${esc(x.sigla)} no pedido ${esc(p.numero)}"></td></tr>`).join('')).join('')}</tbody></table></div>
+   <p style="margin:8px 0 0;font-weight:700">Total: <span id="ettot"></span> etiqueta(s)</p></div>
+   <footer><button class="btn" id="etok">Imprimir etiquetas</button></footer>`,{wide:true});
+  const ler=()=>{let t=0;m.querySelectorAll('[data-en]').forEach(e=>t+=Math.max(0,Math.min(200,parseInt(e.value)||0)));m.querySelector('#ettot').textContent=t;return t};
+  m.querySelectorAll('[data-en]').forEach(e=>e.oninput=ler);ler();
+  m.querySelector('#etok').onclick=()=>{let h='',tot=0;
+    L.forEach((p,pi)=>{const prods=p.prods.length?p.prods:[{sigla:'',qtd:0}];const ns=prods.map((x,xi)=>Math.max(0,Math.min(200,parseInt(m.querySelector(`[data-en="${pi}-${xi}"]`).value)||0)));const N=ns.reduce((a,b)=>a+b,0);let k=0;
+      prods.forEach((x,xi)=>{const n=ns[xi],qt=(n===1&&x.qtd>1)?String(x.qtd).replace('.',','):'';for(let j=0;j<n;j++)h+=etiquetaHTML({numero:p.numero,topo:p.topo,cliente:p.cliente,cidade:p.cidade,sigla:x.sigla,qtdTxt:qt,k:++k,n:N})});tot+=N});
+    if(!tot){toast('Nenhuma etiqueta para imprimir.');return}
+    m.fechar();imprimir(h,'size:100mm 60mm;margin:0');toast(tot+' etiqueta(s) enviadas para impressão')};
+}
 function imprimirEtiquetas(r){
-  let h='',tot=0;r.paradas.forEach(p=>{const e=etiquetasDoPedido({numero:p.numero,topo:'Rom. '+r.numero+' · '+dt(r.data+'T12:00:00'),cliente:p.cliente,cidade:p.cidade+' · Parada '+p.ordem,itens:p.itens},p.caixas);h+=e.h;tot+=e.n});
-  imprimir(h,'size:100mm 60mm;margin:0');toast(tot+' etiqueta(s) enviadas para impressão');
+  janelaEtiquetas(r.paradas.map(p=>({numero:p.numero,topo:'Rom. '+r.numero+' · '+dt(r.data+'T12:00:00'),cliente:p.cliente,cidade:p.cidade+' · Parada '+p.ordem,itens:p.itens})));
 }
 function imprimirRomaneio(r){
   const cx=r.paradas.reduce((s,p)=>s+p.caixas,0),tot=r.paradas.reduce((s,p)=>s+p.total,0);
