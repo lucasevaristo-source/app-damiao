@@ -1908,8 +1908,11 @@ function produtosEtiqueta(itens){const m=new Map();(itens||[]).forEach(i=>{const
 function etiquetaHTML(o){const s=o.sigla||'',tam=s.length<=8?'gg':s.length<=14?'g':s.length<=22?'m':'p';
   return `<div class="pr-lbl"><div class="t"><span class="ped">Pedido ${esc(o.numero)}</span><span>${esc(o.topo||'')}</span></div><div><div class="cli">${esc(o.cliente||'')}</div><div class="cid">${esc(o.cidade||'')}</div></div><div class="sg sg-${tam}"><span>${esc(s)}${o.qtdTxt?` <small>×${esc(o.qtdTxt)}</small>`:''}</span></div><div class="ft"><span style="font-size:9pt">Damião Pães</span><span class="cx">Caixa ${o.k} de ${o.n}</span></div></div>`}
 /* lista: [{numero,topo,cliente,cidade,itens}] — mostra produto por produto quantas etiquetas vão sair, permite corrigir e imprime */
-function janelaEtiquetas(lista){
-  const L=lista.map(p=>({...p,prods:produtosEtiqueta(p.itens)})).filter(p=>p.prods.length);
+async function janelaEtiquetas(lista){
+  /* unidade e nome da etiqueta vêm do cadastro do produto (o pedido nem sempre guarda a unidade) */
+  let porId={},porNome={};try{(await prcCat()).produtos.forEach(x=>{porId[String(x.id)]=x;porNome[norm(x.nome||'')]=x})}catch(e){}
+  const completar=i=>{const c=porId[String(i.produtoId)]||porNome[norm(i.nome||'')]||{};return {...i,unidade:c.unidade||i.unidade||'',sigla:i.sigla||c.sigla||''}};
+  const L=lista.map(p=>({...p,prods:produtosEtiqueta((p.itens||[]).map(completar))})).filter(p=>p.prods.length);
   if(!L.length){toast('Nenhum produto em caixa (CX) nos pedidos escolhidos. Só produtos em caixa têm etiqueta.');return}
   const m=modal(`<header><h3>Etiquetas das caixas</h3><button data-fechar>×</button></header><div class="body">
    <p style="margin:0;color:var(--muted);font-size:14px">Só produtos vendidos em caixa (CX) têm etiqueta: uma por caixa, com só um produto em cada. Confira a quantidade de etiquetas de cada produto e corrija se precisar. Escolha a <b>impressora de etiquetas</b> na hora de imprimir.</p>
