@@ -1910,7 +1910,7 @@ function etiquetaHTML(o){const s=o.sigla||'',tam=s.length<=8?'gg':s.length<=14?'
 /* lista: [{numero,topo,cliente,cidade,itens}] — mostra produto por produto quantas etiquetas vão sair, permite corrigir e imprime */
 async function janelaEtiquetas(lista){
   /* unidade e nome da etiqueta vêm do cadastro do produto (o pedido nem sempre guarda a unidade) */
-  let porId={},porNome={};try{(await prcCat()).produtos.forEach(x=>{porId[String(x.id)]=x;porNome[norm(x.nome||'')]=x})}catch(e){}
+  let porId={},porNome={};try{PRC_CAT=await api('produtosPainel',{});PRC_CAT.produtos.forEach(x=>{porId[String(x.id)]=x;porNome[norm(x.nome||'')]=x})}catch(e){}
   const completar=i=>{const c=porId[String(i.produtoId)]||porNome[norm(i.nome||'')]||{};return {...i,unidade:c.unidade||i.unidade||'',sigla:i.sigla||c.sigla||''}};
   const L=lista.map(p=>({...p,prods:produtosEtiqueta((p.itens||[]).map(completar))})).filter(p=>p.prods.length);
   if(!L.length){toast('Os pedidos escolhidos não têm itens.');return}
