@@ -313,6 +313,10 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const R$=v=>(v==null?'—':'R$ '+(+v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
 const dt=iso=>iso?new Date(iso).toLocaleDateString('pt-BR'):'';
 const dth=iso=>iso?new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+const SEM_VEND='__sem__';
+const nomesVendedores=l=>[...new Set(l.map(p=>p.vendedor||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
+const casaVendedor=(p,v)=>!v||(v===SEM_VEND?!p.vendedor:(p.vendedor||'')===v);
+const optsVendedores=(l,todos)=>`<option value="">${todos}</option>`+nomesVendedores(l).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')+(l.some(p=>!p.vendedor)?`<option value="${SEM_VEND}">Sem vendedor</option>`:'');
 const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return store.m[k]||null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){store.m[k]=v}},del(k){try{localStorage.removeItem(k)}catch(e){delete store.m[k]}},m:{}};
 const API_URL='https://script.google.com/macros/s/AKfycbx0BzhNgKhnkTRuVgU0dRokGeuw7JgN2vkZv5wxzBS5vn72Uz34xPPbrZPualqWSAH5zg/exec';
@@ -855,9 +859,26 @@ async function vDashboard(){
   });
   $('#dref').onclick=vDashboard;
   try{
-    const d=await api('dashboard');
+    const d0=await api('dashboard');
     if(!body.isConnected)return;
-    $('#dscope').textContent=d.escopo+' · '+d.clientes+' clientes · pedidos do App';
+    let PD=null;
+    const diaL=x=>{const t=new Date(x);return isNaN(t)?'':new Date(t.getTime()-t.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+    const somaDias=(ds,n)=>{const t=new Date(ds+'T12:00:00');t.setDate(t.getDate()+n);return diaL(t)};
+    const filtrar=(nome)=>{ // recalcula os números só com os pedidos do vendedor escolhido
+      const l=PD.filter(p=>p.status!=='Cancelado'&&casaVendedor(p,nome)),r2=v=>Math.round(v*100)/100;
+      const rot=nome===SEM_VEND?'Sem vendedor':nome;
+      const sem=l.filter(p=>diaL(p.data)>=d0.inicioSemana),mes=l.filter(p=>diaL(p.data).slice(0,7)===d0.mesRef);
+      const tot=a=>r2(a.reduce((t,p)=>t+(+p.total||0),0)),pd={};mes.forEach(p=>{const k=diaL(p.data);pd[k]=(pd[k]||0)+(+p.total||0)});
+      const valores=d0.semanas.map(w=>{const f=somaDias(w,7);return tot(l.filter(p=>{const k=diaL(p.data);return k>=w&&k<f}))});
+      return {...d0,escopo:'Vendedor: '+rot,clientes:new Set(mes.map(p=>p.clienteId)).size,semana:tot(sem),mes:tot(mes),pedidosMes:mes.length,ticketMes:mes.length?r2(tot(mes)/mes.length):0,
+        porDia:Object.entries(pd).map(([k,v])=>[k,r2(v)]),ranking:[{nome:rot,semana:tot(sem),mes:tot(mes)}],series:[{nome:rot,valores}],_filtrado:1};
+    };
+    if(GESTAO()&&!$('#dvend')){const sl=document.createElement('select');sl.className='inp';sl.id='dvend';sl.setAttribute('aria-label','Filtrar por vendedor');sl.style.cssText='width:auto;height:36px;margin-right:8px';sl.innerHTML='<option value="">Todos os vendedores</option>';$('#dref').before(sl);
+      api('listarPedidos',{},true).then(l=>{PD=l;const v=sl.value;sl.innerHTML=optsVendedores(l,'Todos os vendedores');sl.value=v}).catch(()=>{sl.remove()});
+      sl.onchange=()=>{if(!PD){toast('Carregando pedidos, tente de novo em instantes.');sl.value='';return}desenhar(sl.value?filtrar(sl.value):d0)};}
+    desenhar(d0);
+    function desenhar(d){
+    $('#dscope').textContent=d.escopo+' · '+d.clientes+(d._filtrado?' clientes com pedido no mês':' clientes')+' · pedidos do App';
     const mesNome=new Date(d.mesRef+'-15').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
     $('#dbody').innerHTML=`<div class="kpis">
       <div class="kpi hy"><span class="l">Faturado na semana</span><span class="v num">${R$(d.semana)}</span><span class="s">Desde segunda, ${dt(d.inicioSemana+'T12:00:00')}</span></div>
@@ -882,6 +903,7 @@ async function vDashboard(){
     charts.push(new Chart($('#c1'),{type:'bar',data:{labels:dias,datasets:[{data:dias.map(x=>map[d.mesRef+'-'+x]||0),backgroundColor:'#2563eb',borderRadius:4}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
     charts.push(new Chart($('#c2'),{type:'bar',data:{labels:d.ranking.map(r=>r.nome),datasets:[{label:'Semana',data:d.ranking.map(r=>r.semana),backgroundColor:'#f5d23e',borderRadius:4},{label:'Mês',data:d.ranking.map(r=>r.mes),backgroundColor:'#2563eb',borderRadius:4}]},options:{maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
     charts.push(new Chart($('#c3'),{type:'line',data:{labels:d.semanas.map(s=>s.slice(8)+'/'+s.slice(5,7)),datasets:d.series.map((s,i)=>({label:s.nome,data:s.valores,borderColor:cor[i%cor.length],backgroundColor:cor[i%cor.length],tension:.3,pointRadius:3}))},options:{maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+R$(c.raw)}}},scales:{y:{beginAtZero:true,suggestedMax:100,ticks:{callback:fmt,precision:0},grid},x:{grid:{display:false}}}}}));
+    }
   }catch(e){if(body.isConnected)body.innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}
 }
 
@@ -1095,12 +1117,13 @@ async function vRelatorios(){
   <div class="rel-grid">
    ${card('cli','Clientes','Lista completa de clientes com filtros.','Nome, documento, e-mail, telefone, endereço, vendedor, tabela e compras',`<div class="grid2"><div class="field"><label for="rcst">Situação</label><select id="rcst" class="inp"><option value="">Todos</option><option value="aprovado">Aprovados</option><option value="pendente">Aguardando aprovação</option></select></div><div class="field"><label for="rcci">Cidade</label><select id="rcci" class="inp"><option value="">Todas</option></select></div></div>`)}
    ${card('prod','Produtos','Catálogo de produtos com preços e estoque.','Código, descrição, categoria, preço, saldo e status na loja',`<label class="cat-ck"><input type="checkbox" id="rpvis"> Só produtos que aparecem na loja</label>`)}
-   ${card('ped','Pedidos','Relatório de pedidos por período.','Data, status, cliente, vendedor, forma de pagamento e valores',`<div class="grid2"><div class="field"><label for="rpde">De</label><input type="date" id="rpde" class="inp" value="${iso(ini)}"></div><div class="field"><label for="rpate">Até</label><input type="date" id="rpate" class="inp" value="${iso(hoje)}"></div><div class="field"><label for="rpst">Status</label><select id="rpst" class="inp"><option value="">Todos (menos cancelados)</option>${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue','Cancelado'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="field"><label for="rpfp">Forma de pagamento</label><select id="rpfp" class="inp"><option value="">Todas</option></select></div></div><div class="field"><label for="rpcli">Cliente</label><select id="rpcli" class="inp"><option value="">Todos</option></select></div><label class="cat-ck"><input type="checkbox" id="rpit"> Detalhar itens (uma linha por produto)</label>`)}
+   ${card('ped','Pedidos','Relatório de pedidos por período.','Data, status, cliente, vendedor, forma de pagamento e valores',`<div class="grid2"><div class="field"><label for="rpde">De</label><input type="date" id="rpde" class="inp" value="${iso(ini)}"></div><div class="field"><label for="rpate">Até</label><input type="date" id="rpate" class="inp" value="${iso(hoje)}"></div><div class="field"><label for="rpst">Status</label><select id="rpst" class="inp"><option value="">Todos (menos cancelados)</option>${['Recebido','Em separação','Enviado ao Bling','Faturado','Entregue','Cancelado'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="field"><label for="rpfp">Forma de pagamento</label><select id="rpfp" class="inp"><option value="">Todas</option></select></div></div><div class="grid2"><div class="field"><label for="rpcli">Cliente</label><select id="rpcli" class="inp"><option value="">Todos</option></select></div>${ME.papel!=='vendedor'?'<div class="field"><label for="rpven">Vendedor</label><select id="rpven" class="inp"><option value="">Todos</option></select></div>':''}</div><label class="cat-ck"><input type="checkbox" id="rpit"> Detalhar itens (uma linha por produto)</label>`)}
    ${card('est','Estoque','Saldos atualizados do Bling por produto.','Saldo, preço e valor total em estoque',`<label class="cat-ck"><input type="checkbox" id="rezero"> Esconder produtos com saldo zero</label>`)}
    ${card('pre','Preços','Preços de todas as tabelas por produto.','Produto, preço do Bling e preço em cada tabela','')}
   </div>`;
   let cache={};const get=(k,f)=>cache[k]||(cache[k]=f());
   get('cli',()=>api('listarClientes',{},true)).then(cl=>{const cid=[...new Set(cl.map(c=>c.cidade).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));$('#rcci').insertAdjacentHTML('beforeend',cid.map(c=>`<option>${esc(c)}</option>`).join(''));$('#rpcli').insertAdjacentHTML('beforeend',cl.slice().sort((a,b)=>(a.fantasia||a.nome).localeCompare(b.fantasia||b.nome,'pt')).map(c=>`<option value="${esc(c.id)}">${esc(c.fantasia||c.nome)}</option>`).join(''))}).catch(()=>{});
+  if($('#rpven'))get('ped',()=>api('listarPedidos',{},true)).then(l=>{$('#rpven').innerHTML=optsVendedores(l,'Todos')}).catch(()=>{});
   get('fp',()=>api('formasPagamento',{},true)).then(f=>$('#rpfp').insertAdjacentHTML('beforeend',f.map(x=>`<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join(''))).catch(()=>{});
   const dt=s=>{const x=new Date(s);return isNaN(x)?'':x.toLocaleDateString('pt-BR')};
   const R={
@@ -1111,10 +1134,10 @@ async function vRelatorios(){
       return ['produtos','Produtos',[{k:'codigo',t:'Código',w:1.2},{k:'nome',t:'Descrição',w:4},{k:'categoria',t:'Categoria',w:1.8},{k:'marca',t:'Marca',w:1.3},{k:'unidade',t:'Un.',w:.6},{k:'gtin',t:'GTIN',w:1.5},{k:'precoBase',t:'Preço',w:1.1,m:1},{k:'estoque',t:'Saldo',w:.9,n:1},{k:'loja',t:'Na loja',w:.9}],
         l.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt')).map(p=>({...p,precoBase:+p.precoBase||0,estoque:p.estoque==null?'':+p.estoque,loja:p.oculto?'Pausado':p.precoBase>0?'Sim':'Sem preço'}))]},
     ped:async()=>{const [l,fp]=await Promise.all([get('ped',()=>api('listarPedidos',{},true)),get('fp',()=>api('formasPagamento',{},true)).catch(()=>[])]);
-      const de=$('#rpde').value,ate=$('#rpate').value,st=$('#rpst').value,f=$('#rpfp').value,c=$('#rpcli').value,fn=id=>(fp.find(x=>String(x.id)===String(id))||{}).nome||'';
-      const sel=l.filter(p=>{const d=iso(new Date(p.data));return(!de||d>=de)&&(!ate||d<=ate)&&(st?p.status===st:p.status!=='Cancelado')&&(!f||String(p.formaPagamentoId)===f)&&(!c||String(p.clienteId)===c)}).sort((a,b)=>String(a.data).localeCompare(String(b.data)));
-      if($('#rpit').checked)return ['pedidos_itens','Pedidos por item',[{k:'numero',t:'Pedido',w:.8},{k:'data',t:'Data',w:1},{k:'cliente',t:'Cliente',w:2.6},{k:'codigo',t:'Código',w:1},{k:'nome',t:'Produto',w:3.2},{k:'qtd',t:'Qtd.',w:.7,n:1,soma:1},{k:'unidade',t:'Un.',w:.6},{k:'preco',t:'Preço',w:1,m:1},{k:'total',t:'Total',w:1.1,m:1,soma:1},{k:'status',t:'Status',w:1.3}],
-        sel.flatMap(p=>(p.itens||[]).map(i=>({numero:p.numero,data:dt(p.data),cliente:p.cliente,codigo:i.codigo,nome:i.nome,qtd:+i.qtd,unidade:i.unidade||'',preco:+i.preco,total:+i.total,status:p.status})))];
+      const de=$('#rpde').value,ate=$('#rpate').value,st=$('#rpst').value,f=$('#rpfp').value,c=$('#rpcli').value,vd=$('#rpven')?$('#rpven').value:'',fn=id=>(fp.find(x=>String(x.id)===String(id))||{}).nome||'';
+      const sel=l.filter(p=>{const d=iso(new Date(p.data));return(!de||d>=de)&&(!ate||d<=ate)&&(st?p.status===st:p.status!=='Cancelado')&&(!f||String(p.formaPagamentoId)===f)&&(!c||String(p.clienteId)===c)&&casaVendedor(p,vd)}).sort((a,b)=>String(a.data).localeCompare(String(b.data)));
+      if($('#rpit').checked)return ['pedidos_itens','Pedidos por item',[{k:'numero',t:'Pedido',w:.8},{k:'data',t:'Data',w:1},{k:'cliente',t:'Cliente',w:2.4},{k:'vendedor',t:'Vendedor',w:1.3},{k:'codigo',t:'Código',w:1},{k:'nome',t:'Produto',w:3.2},{k:'qtd',t:'Qtd.',w:.7,n:1,soma:1},{k:'unidade',t:'Un.',w:.6},{k:'preco',t:'Preço',w:1,m:1},{k:'total',t:'Total',w:1.1,m:1,soma:1},{k:'status',t:'Status',w:1.3}],
+        sel.flatMap(p=>(p.itens||[]).map(i=>({numero:p.numero,data:dt(p.data),cliente:p.cliente,vendedor:p.vendedor||'',codigo:i.codigo,nome:i.nome,qtd:+i.qtd,unidade:i.unidade||'',preco:+i.preco,total:+i.total,status:p.status})))];
       return ['pedidos','Pedidos',[{k:'numero',t:'Pedido',w:.8},{k:'data',t:'Data',w:1},{k:'cliente',t:'Cliente',w:2.8},{k:'cidade',t:'Cidade',w:1.4},{k:'vendedor',t:'Vendedor',w:1.4},{k:'forma',t:'Forma de pagamento',w:1.6},{k:'status',t:'Status',w:1.3},{k:'qitens',t:'Itens',w:.6,n:1},{k:'frete',t:'Frete',w:.9,m:1,soma:1},{k:'total',t:'Total',w:1.1,m:1,soma:1},{k:'bling',t:'Bling nº',w:.9}],
         sel.map(p=>({numero:p.numero,data:dt(p.data),cliente:p.cliente,cidade:p.cidade,vendedor:p.vendedor,forma:fn(p.formaPagamentoId),status:p.status,qitens:(p.itens||[]).length,frete:+p.frete||0,total:+p.total||0,bling:p.blingNumero||''}))]},
     est:async()=>{const [s,c]=await Promise.all([get('est',()=>api('estoqueSaldos',{},true)),get('prod',()=>api('produtosPainel',{},true))]);const pr={};c.produtos.forEach(p=>pr[p.id]=+p.precoBase||0);
@@ -1382,18 +1405,20 @@ function imprimirPedido(p){imprimirPedidosSelecionados([p]);}
 async function vPedidos(){
   const STATUS_PED=['Recebido','Em separação','Enviado ao Bling','Faturado','Em rota','Entregue','Cancelado'];
   M().innerHTML=`<div class="ph"><div><h1>Pedidos</h1><p>${ME.papel==='vendedor'?'Pedidos dos seus clientes':'Todos os pedidos do App'}</p></div><button class="btn" id="pn">${ICON.novo.replace('<svg','<svg width="18" height="18"')}Novo pedido</button></div>
-    <div class="toolbar"><input class="inp" id="pb" placeholder="Buscar cliente, pedido ou cidade" aria-label="Buscar pedidos"><select class="inp" id="pf" style="flex:0 0 220px" aria-label="Situação do pedido"><option value="">Todas as situações</option>${STATUS_PED.map(s=>`<option>${esc(s)}</option>`).join('')}</select></div>
+    <div class="toolbar"><input class="inp" id="pb" placeholder="Buscar cliente, pedido ou cidade" aria-label="Buscar pedidos"><select class="inp" id="pf" style="flex:0 0 220px" aria-label="Situação do pedido"><option value="">Todas as situações</option>${STATUS_PED.map(s=>`<option>${esc(s)}</option>`).join('')}</select>${ME.papel!=='vendedor'?'<select class="inp" id="pv" style="flex:0 0 220px" aria-label="Vendedor"><option value="">Todos os vendedores</option></select>':''}</div>
+    <div id="presumo" style="font-size:13px;color:var(--muted);margin:6px 2px"></div>
     <div class="sel-bar"><b id="pselnumero">Nenhum pedido selecionado</b><button class="btn" id="pimprimir" disabled>Imprimir na Elgin i9</button><button class="btn o" id="petiq" disabled>Etiquetas das caixas</button><span class="st-lote"><select class="inp" id="pstl" aria-label="Nova situação para os selecionados" disabled><option value="">Mudar situação…</option>${STATUS_PED.filter(s=>!(OPER()&&s==='Cancelado')).map(s=>`<option>${esc(s)}</option>`).join('')}</select><button class="btn o" id="pstok" disabled>Aplicar</button></span><button class="btn o" id="plimpar" disabled>Limpar seleção</button>${GESTAO()?'<button class="btn o" id="pexcluir" disabled style="color:var(--red);border-color:#f3b4b4">Excluir selecionados</button>':''}<span style="font-size:12px">Papel 80 mm · escolha Elgin i9 na impressão</span></div>
     <div class="scroll" id="pt"><div class="empty"><b>Carregando…</b></div></div>`;
   const selecionados=new Set();let visiveis=[];
   const atualizarSelecao=()=>{const n=selecionados.size;$('#pselnumero').textContent=n?n+' pedido'+(n===1?' selecionado':'s selecionados'):'Nenhum pedido selecionado';$('#pimprimir').disabled=!n;$('#plimpar').disabled=!n;$('#petiq').disabled=!n;$('#pstl').disabled=!n;$('#pstok').disabled=!n;if($('#pexcluir'))$('#pexcluir').disabled=!n;const all=$('#pall');if(all){all.checked=visiveis.length>0&&visiveis.every(p=>selecionados.has(String(p.id)));all.indeterminate=visiveis.some(p=>selecionados.has(String(p.id)))&&!all.checked;}};
   const render=()=>{
-    const q=norm($('#pb').value),f=$('#pf').value;
-    visiveis=PEDS.filter(p=>(!f||p.status===f)&&(!q||norm(p.cliente+' '+p.numero+' '+p.cidade).includes(q)));
+    const q=norm($('#pb').value),f=$('#pf').value,vd=$('#pv')?$('#pv').value:'';
+    visiveis=PEDS.filter(p=>(!f||p.status===f)&&casaVendedor(p,vd)&&(!q||norm(p.cliente+' '+p.numero+' '+p.cidade).includes(q)));
+    {const val=visiveis.filter(p=>p.status!=='Cancelado');$('#presumo').innerHTML=visiveis.length?`<b>${visiveis.length}</b> pedido${visiveis.length===1?'':'s'} na lista · vendas (sem cancelados): <b class="num">${R$(val.reduce((t,p)=>t+(+p.total||0),0))}</b>`:'';}
     $('#pt').innerHTML=visiveis.length?`<table class="t"><thead><tr><th><input type="checkbox" class="chk" id="pall" aria-label="Selecionar todos os pedidos exibidos"></th><th>Pedido</th><th>Data</th><th>Cliente</th><th>Cidade</th>${ME.papel!=='vendedor'?'<th>Vendedor</th>':''}<th>Situação</th><th class="r">Total</th><th>Ações</th></tr></thead><tbody>${visiveis.map(p=>`<tr class="click" data-id="${esc(p.id)}"><td><input type="checkbox" class="chk" data-pedido="${esc(p.id)}" aria-label="Selecionar pedido ${esc(p.numero)}" ${selecionados.has(String(p.id))?'checked':''}></td><td class="num"><b>#${esc(p.numero)}</b></td><td>${dth(p.data)}</td><td>${esc(p.cliente)}</td><td>${esc(p.cidade)}</td>${ME.papel!=='vendedor'?`<td>${esc(p.vendedor||'—')}</td>`:''}<td><select class="st-sel st-${esc(norm(p.status).replace(/[^a-z]/g,''))}" data-st="${esc(p.id)}" aria-label="Situação do pedido ${esc(p.numero)}">${STATUS_PED.filter(s=>s===p.status||!(OPER()&&s==='Cancelado')).map(s=>`<option ${s===p.status?'selected':''}>${esc(s)}</option>`).join('')}</select>${p.erroBling?' <span class="pill p-bad">Erro Bling</span>':''}</td><td class="r num">${R$(p.total)}</td><td><button class="btn o sm" data-ver="${esc(p.id)}">Ver</button>${pedEditavel(p)?` <button class="btn o sm" data-editar-pedido="${esc(p.id)}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum pedido encontrado</b>Mude a busca ou a situação.</div>';
     atualizarSelecao();
   };
-  $('#pn').onclick=()=>{VIEW='novo';iniciarPainel();};$('#pb').oninput=render;$('#pf').onchange=render;
+  $('#pn').onclick=()=>{VIEW='novo';iniciarPainel();};$('#pb').oninput=render;$('#pf').onchange=render;if($('#pv'))$('#pv').onchange=render;
   $('#plimpar').onclick=()=>{selecionados.clear();render();};
   $('#pimprimir').onclick=()=>imprimirPedidosSelecionados(PEDS.filter(p=>selecionados.has(String(p.id))));
   $('#petiq').onclick=()=>etiquetasPedidos(PEDS.filter(p=>selecionados.has(String(p.id))));
@@ -1409,7 +1434,7 @@ async function vPedidos(){
   if($('#pexcluir'))$('#pexcluir').onclick=()=>excluirPedidos(PEDS.filter(p=>selecionados.has(String(p.id))),()=>{selecionados.clear();vPedidos()});
   $('#pt').onchange=e=>{if(e.target.id==='pall'){visiveis.forEach(p=>e.target.checked?selecionados.add(String(p.id)):selecionados.delete(String(p.id)));render();}else if(e.target.dataset.pedido){e.target.checked?selecionados.add(e.target.dataset.pedido):selecionados.delete(e.target.dataset.pedido);atualizarSelecao();}};
   $('#pt').onclick=e=>{if(e.target.closest('input,select'))return;const ed=e.target.closest('[data-editar-pedido]'),tr=e.target.closest('tr[data-id]');if(!tr)return;const p=PEDS.find(p=>String(p.id)===tr.dataset.id);if(ed)editarPedido(p,vPedidos);else detalhePedido(p,true,vPedidos);};
-  try{PEDS=await api('listarPedidos',{},true);render();}catch(e){$('#pt').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`;}
+  try{PEDS=await api('listarPedidos',{},true);if($('#pv'))$('#pv').innerHTML=optsVendedores(PEDS,'Todos os vendedores');render();}catch(e){$('#pt').innerHTML=`<div class="msg bad">${esc(e.message)}</div>`;}
 }
 
 
