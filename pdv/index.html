@@ -374,7 +374,7 @@ table.list{width:100%;border-collapse:collapse}
         <div class="tcol rcol">
           <button class="list-tile" style="background:var(--navy)" data-act="vendas"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM1 2v2h2l3.6 7.6-1.4 2.4C5 14.3 5 14.6 5 15c0 1.1.9 2 2 2h12v-2H7.4l1.1-2h7.4c.8 0 1.4-.4 1.7-1l3.6-6.5A1 1 0 0 0 20 4H5.2l-.9-2z"/></svg>Últimas vendas<b>(U)</b></button>
           <button class="list-tile" style="background:var(--teal)" data-act="caixa"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v12H3zm2 2v8h14V8zm7 1.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z" fill-rule="evenodd"/></svg>Caixa do dia<b>(C)</b></button>
-          <button class="list-tile" style="background:var(--teal2)" data-act="enviar"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8l-4 4h3a6 6 0 0 1-8.8 5.3l-1.5 1.5A8 8 0 0 0 20 12h3zM6 12a6 6 0 0 1 8.8-5.3l1.5-1.5A8 8 0 0 0 4 12H1l4 4 4-4z"/></svg>Enviar ao Bling<b>(E)</b></button>
+          <button class="list-tile" style="background:var(--teal2)" data-act="enviar"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8l-4 4h3a6 6 0 0 1-8.8 5.3l-1.5 1.5A8 8 0 0 0 20 12h3zM6 12a6 6 0 0 1 8.8-5.3l1.5-1.5A8 8 0 0 0 4 12H1l4 4 4-4z"/></svg>Atualizar registros<b>(E)</b></button>
           <button class="list-tile" style="background:var(--dark)" data-act="atualizar"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5zM12 16l5-5h-3V4h-4v7H7z"/></svg>Atualizar produtos<b>(P)</b></button>
           <button class="list-tile" style="background:var(--grey)" data-act="fechamento"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12v6H6zM4 9h16a2 2 0 0 1 2 2v6h-4v5H6v-5H2v-6a2 2 0 0 1 2-2zm4 8v3h8v-3z"/></svg>Fechar caixa<b>(F)</b></button>
           <button class="list-tile" style="background:var(--slate)" data-act="ajustes"><svg viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a7 7 0 0 0-1.7-1L14.9 3.3h-4l-.4 2.7a7 7 0 0 0-1.7 1l-2.5-1-2 3.4L6.4 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1c.5.4 1.1.8 1.7 1l.4 2.7h4l.4-2.7c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.4zM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>Configurações<b>(S)</b></button>
@@ -439,7 +439,7 @@ table.list{width:100%;border-collapse:collapse}
     <!-- ÚLTIMAS VENDAS -->
     <section class="screen" id="s-vendas" hidden>
       <div class="pagewrap"><div class="pg">
-        <div class="filters"><input type="date" id="fData" aria-label="Data"><select id="fStatus" aria-label="Situação"><option value="">Todas as situações</option><option value="pendente">Aguardando envio</option><option value="enviada">No Bling</option><option value="erro">Com erro</option><option value="cancelada">Canceladas</option></select><span class="grow"></span><button class="btn" id="btnSend">Enviar pendentes ao Bling</button></div>
+        <div class="filters"><input type="date" id="fData" aria-label="Data"><select id="fStatus" aria-label="Situação"><option value="">Todas as situações</option><option value="pendente">Registrando no caixa</option><option value="registrada">Aguardando fechamento</option><option value="fechada">Caixa fechado: fila Bling</option><option value="conferencia">Conferir integração</option><option value="enviada">No Bling</option><option value="erro">Com erro</option><option value="cancelada">Canceladas</option></select><span class="grow"></span><button class="btn" id="btnSend">Atualizar registros e sincronização</button></div>
         <div class="card scroll"><table class="list" id="tVendas"></table></div>
       </div></div>
     </section>
@@ -1040,22 +1040,19 @@ const Sync={
       const pend=(await DB.all('vendas')).filter(v=>!v.alteracaoPendente&&v.caixaSessaoId&&(v.status==='pendente'||(v.status==='erro'&&v.tentativas<20))).sort((a,b)=>a.criadaEm.localeCompare(b.criadaEm));
       for(const v of pend){
         try{
-          const j=await this.req('venda',{venda:{id:v.id,revisao:v.revisao||0,caixaSessaoId:v.caixaSessaoId,anteriorAoCaixa:!!v.anteriorAoCaixa,operadorOriginal:v.operadorOriginal,caixa:v.caixa,numero:v.numero,data:v.dia,criadaEm:v.criadaEm,clienteId:v.cliente&&v.cliente.id,cpf:v.cpf,vendedorId:v.vendedorId,operador:v.operador,
-            itens:v.itens.map(i=>({produtoId:i.produtoId,codigo:i.codigo,nome:i.nome,unidade:i.unidade,qtd:i.qtd,valor:i.preco/100,precoOriginal:(i.precoOriginal??i.preco)/100,descontoPct:i.descPct||0})),
-            desconto:(v.subtotal-v.total+(v.taxaEntrega||0))/100,taxaEntrega:(v.taxaEntrega||0)/100,obs:v.obs||'',total:v.total/100,pagamentos:v.pagamentos.map(p=>({formaId:p.formaId,valor:p.valorLiquido/100})),fiscal:v.fiscal.modo}});
-          v.status='enviada';v.erro='';v.bling={pedidoId:j.pedidoId,numero:j.numero};
+          const j=await this.req('venda',{venda:PdvAlteracoes.payload(v)});
+          v.status=j.legado?'enviada':'registrada';v.erro='';v.revisao=j.revisao??v.revisao??0;if(j.pedidoId)v.bling={pedidoId:j.pedidoId,numero:j.numero};
         }catch(e){v.status='erro';v.erro=String(e.message||e);v.tentativas++;
-          // número repetido (ex.: PDV aberto em outro navegador/perfil começou a contagem do zero): pula a numeração e reenvia com número novo
-          if(/n[uú]mero de venda j[aá] usado/i.test(v.erro)&&(v.renumeracoes||0)<10){const m=await DB.get('meta','seq');await DB.put('meta',{id:'seq',v:(m?m.v:0)+1000});v.numeroOriginal=v.numeroOriginal||v.numero;v.numero=await nextNumero();v.renumeracoes=(v.renumeracoes||0)+1;v.status='pendente';v.erro='';v.tentativas=Math.max(0,v.tentativas-1);setTimeout(()=>Sync.enviar().catch(()=>{}),1500)}
           if(!navigator.onLine){await DB.put('vendas',v);break}}
         await DB.put('vendas',v);
       }
+    await PdvCaixa.conferirVendas();
     }finally{this.busy=false;updateQueue();if(screen==='vendas')renderVendas();if(PdvCaixa.autenticado&&navigator.onLine)PdvCaixa.atualizar().catch(()=>{});}
   }
 };
 async function enviarAgora(){if(!CFG.url){toast('Ligue ao Bling em Configurações primeiro');return}if(!navigator.onLine){toast('Sem internet. As vendas vão quando a conexão voltar.');return}
-  for(const v of await DB.all('vendas'))if(v.status==='erro'){v.tentativas=0;await DB.put('vendas',v)}toast('Enviando vendas ao Bling...');await Sync.enviar();
-  const e=(await DB.all('vendas')).filter(v=>v.status==='erro').length;toast(e?e+' venda(s) com erro. Veja em Últimas vendas.':'Vendas enviadas')}
+  for(const v of await DB.all('vendas'))if(v.status==='erro'){v.tentativas=0;await DB.put('vendas',v)}toast('Registrando vendas no caixa...');await Sync.enviar();
+  const e=(await DB.all('vendas')).filter(v=>v.status==='erro').length;toast(e?e+' venda(s) com erro. Veja em Últimas vendas.':'Vendas registradas no caixa; o envio ao Bling ocorre após o fechamento')}
 async function atualizarCatalogo(){if(!CFG.url){toast('Ligue ao Bling em Configurações primeiro');return}toast('Baixando produtos e clientes do Bling...');
   try{const n=await Sync.catalogo();toast(n+' produtos atualizados')}catch(e){toast('Não consegui atualizar: '+(e.message||e))}}
 
@@ -1065,8 +1062,8 @@ async function updateQueue(){
   const vs=await DB.all('vendas');const p=vs.filter(v=>v.status==='pendente').length,e=vs.filter(v=>v.status==='erro').length;
   const q=$('#queue');
   if(e){q.hidden=false;q.className='qbadge err';q.textContent=e+' com erro'}
-  else if(p){q.hidden=false;q.className='qbadge';q.textContent=p+' a enviar'}
-  else q.hidden=true;
+  else if(p){q.hidden=false;q.className='qbadge';q.textContent=p+' a registrar'}
+  else {const revisar=vs.filter(v=>v.status==='conferencia').length,fechadas=vs.filter(v=>v.status==='fechada').length,aguardando=vs.filter(v=>v.status==='registrada').length;q.hidden=!(revisar||fechadas||aguardando);q.textContent=revisar?revisar+' para conferir':fechadas?fechadas+' na fila do Bling':aguardando+' aguardando fechamento';}
 }
 addEventListener('online',()=>{updateQueue();Sync.enviar()});addEventListener('offline',updateQueue);
 setInterval(()=>Sync.enviar(),30000);
@@ -1081,7 +1078,7 @@ Sync.checar=async function(){
 setInterval(()=>Sync.checar(),60000);
 
 /* ================= últimas vendas ================= */
-const statusTxt=s=>({pendente:'Aguardando envio',enviada:'No Bling',erro:'Com erro',cancelada:'Cancelada',demo:'Demonstração'}[s]||s);
+const statusTxt=s=>({pendente:'Registrando no caixa',registrada:'Aguardando fechamento',fechada:'Caixa fechado · aguardando Bling',conferencia:'Conferir integração',enviada:'No Bling',erro:'Com erro',cancelada:'Cancelada',demo:'Demonstração'}[s]||s);
 async function renderVendas(){
   $('#fData').disabled=!PdvCaixa.admin();if(!PdvCaixa.admin())$('#fData').value=today();
   if(!$('#fData').value)$('#fData').value=today();
@@ -1091,7 +1088,7 @@ async function renderVendas(){
    (vs.map(v=>`<tr><td class="num">${esc(v.numero)}</td><td class="num">${new Date(v.criadaEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td>
    <td>${esc(v.cliente?(v.cliente.fantasia||v.cliente.nome):'Consumidor final')}</td><td>${esc(v.pagamentos.map(p=>p.nome).join(' + '))}</td>
    <td class="r num">${R$(v.total)}</td><td><span class="tag ${v.status}">${statusTxt(v.status)}${v.bling&&v.bling.numero?' · nº '+esc(v.bling.numero):''}</span>${v.erro?`<div class="hint" style="white-space:normal;max-width:280px">${esc(v.erro)}</div>`:''}</td>
-   <td><button class="lnk" data-ver="${v.id}">Ver</button>${v.status!=='cancelada'?`<button class="lnk" data-edit="${v.id}">${v.alteracaoPendente?'Retomar correção':'Editar'}</button><button class="lnk" style="color:var(--red)" data-excluir="${v.id}">Excluir</button>`:''}</td></tr>`).join('')||
+   <td><button class="lnk" data-ver="${v.id}">Ver</button>${v.status!=='cancelada'&&!v.bling&&PdvCaixa.aberto?.id===v.caixaSessaoId?`<button class="lnk" data-edit="${v.id}">${v.alteracaoPendente?'Retomar correção':'Editar'}</button><button class="lnk" style="color:var(--red)" data-excluir="${v.id}">Cancelar</button>`:''}</td></tr>`).join('')||
    '<tr><td colspan="7"><div class="nada" style="padding:24px">Nenhuma venda nesta data</div></td></tr>')+'</tbody>';
 }
 $('#fData').onchange=renderVendas;$('#fStatus').onchange=renderVendas;$('#btnSend').onclick=enviarAgora;

@@ -34,7 +34,8 @@ const PdvCaixa=(()=>{
     }catch(x){bloquear(x.message);}finally{b.disabled=false;}};
     bloquear();
   }
-  async function semPendencias(){await Sync.enviar(true);const p=(await DB.all('vendas')).filter(v=>v.alteracaoPendente||v.status==='pendente'||v.status==='erro');if(p.length){const det=p.slice(0,5).map(v=>'nº '+v.numero+' ('+(v.alteracaoPendente?'correção não concluída: clique em Retomar correção':v.status==='erro'?'erro: '+String(v.erro||'sem detalhe').slice(0,120):!v.caixaSessaoId?'venda sem caixa vinculado: o Master precisa conferir':'aguardando envio')+')').join('; ');throw Error('Existem '+p.length+' venda(s) sem confirmação no Bling: '+det+'. Veja em Últimas vendas, resolva e tente de novo.');}}
+  async function semPendencias(){await Sync.enviar(true);const p=(await DB.all('vendas')).filter(v=>v.caixaSessaoId===estado.aberto?.id&&(v.alteracaoPendente||v.status==='pendente'||v.status==='erro'));if(p.length)throw Error('Existem vendas ou correções ainda não registradas no caixa. Confira Últimas vendas antes de fechar.');}
+  async function conferirVendas(){const vs=(await DB.all('vendas')).filter(v=>v.caixaSessaoId&&diaPermitido(v.dia)&&['registrada','fechada','conferencia'].includes(v.status));for(let i=0;i<vs.length;i+=200){const lote=vs.slice(i,i+200),rs=await api('pdvVendasEstado',{ids:lote.map(v=>v.id)});for(const r of rs){const v=lote.find(v=>v.id===r.id);if(!v||v.alteracaoPendente||(+v.revisao||0)!==r.revisao)continue;v.status=r.estado==='sincronizada'?'enviada':r.estado==='registrada'?'registrada':r.estado==='conferencia'?'conferencia':r.estado==='cancelada'?'cancelada':'fechada';v.erro=r.erro||'';if(r.pedidoId)v.bling={pedidoId:r.pedidoId,numero:r.numero};await DB.put('vendas',v);}}}
   async function abrir(){
     await atualizar();const anteriores=(await DB.all('vendas')).filter(v=>!v.caixaSessaoId&&['pendente','erro','enviada'].includes(v.status)&&v.caixa===CFG.caixa);
     if(anteriores.length){
@@ -70,16 +71,16 @@ const PdvCaixa=(()=>{
     if(!usuario||Date.now()>expira){bloquear('Entre novamente para continuar.');return;}
     if(cart.itens.length){toast('Conclua ou limpe a venda em andamento antes de fechar o caixa.');return;}
     if(!estado.aberto){toast('Abra o caixa antes de acessar o fechamento.');go('caixa');return;}
-    go('fechamento');const box=document.querySelector('#fechamentoConteudo');
+    const sessaoFechar=estado.aberto.id;go('fechamento');const box=document.querySelector('#fechamentoConteudo');
     box.innerHTML=`<form id="formFechamentoCaixa"><h1 class="fechamento-titulo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 4h10v16H9M3 12h11m-4-4 4 4-4 4"/></svg>Fechamento de caixa</h1><p class="fechamento-subtitulo">Informe os valores</p><label class="fechamento-campo" for="fechamentoDinheiro">Dinheiro</label><div class="fechamento-dinheiro"><span aria-hidden="true">R$</span><input id="fechamentoDinheiro" name="valor" value="0,00" inputmode="decimal" autocomplete="off" required aria-label="Dinheiro contado na gaveta"></div><p class="fechamento-erro" id="fechamentoErro" role="alert" hidden></p><button type="submit" class="fechamento-enviar">Fechar caixa</button></form>`;
     const f=box.querySelector('form'),erro=box.querySelector('#fechamentoErro'),b=f.querySelector('[type="submit"]');
     f.elements.valor.onblur=()=>{try{f.elements.valor.value=new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false}).format(PdvMoney.centavos(f.elements.valor.value)/100);}catch(e){erro.hidden=false;erro.textContent=e.message;}};
     f.onsubmit=e=>{e.preventDefault();acao(async()=>{b.disabled=true;erro.hidden=true;try{
       if(cart.itens.length)throw Error('Conclua ou limpe a venda em andamento primeiro.');
-      const contado=PdvMoney.centavos(f.elements.valor.value);await semPendencias();await atualizar();if(!estado.aberto)throw Error('O caixa já foi fechado.');
-      const justificativa=contado===estado.aberto.esperado?'':'Diferença apurada na contagem física; motivo não informado.';
-      const fechamento=await api('pdvFechar',{sessaoId:estado.aberto.id,contado,justificativa});
-      estado={aberto:null,ultimo:fechamento};go('caixa');toast('Fechamento registrado. Imprimindo relatório.');imprimir(fechamento);
+      const contado=PdvMoney.centavos(f.elements.valor.value);await semPendencias();await atualizar();
+      const justificativa=contado===(estado.aberto||estado.ultimo).esperado?'':'Diferença apurada na contagem física; motivo não informado.';
+      const sessaoId=sessaoFechar,vendas=(await DB.all('vendas')).filter(v=>v.caixaSessaoId===sessaoId).map(v=>({id:v.id,revisao:v.revisao||0,cancelada:v.status==='cancelada'}));const fechamento=await api('pdvFechar',{sessaoId,contado,justificativa,vendas});estado={aberto:null,ultimo:fechamento};try{await conferirVendas();}catch(e){}
+      updateQueue();go('caixa');toast('Caixa fechado. As vendas finais estão na fila do Bling. Imprimindo relatório.');imprimir(fechamento);
     }catch(e){erro.hidden=false;erro.textContent=e.message;throw e;}finally{b.disabled=false;}});};
     f.elements.valor.focus();f.elements.valor.select();
   }
@@ -111,5 +112,5 @@ const PdvCaixa=(()=>{
     printHTML(relatorioHTML(c));
   }
   async function imprimirAtual(){try{await atualizar();const c=estado.aberto||estado.ultimo;if(!c)throw Error('Nenhum caixa registrado.');imprimir(c);}catch(e){toast(e.message);}}
-  return {ponte:PONTE,novoCliente:d=>api('pdvNovoCliente',d),alterarVenda:d=>api('pdvAlterarVenda',d),iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
+  return {conferirVendas,ponte:PONTE,novoCliente:d=>api('pdvNovoCliente',d),alterarVenda:d=>api('pdvAlterarVenda',d),iniciar,podeVender,render,imprimirAtual,atualizar,lock,admin,diaPermitido,fechamento:abrirFechamento,catalogo:()=>api('pdvCatalogo'),versao:()=>api('pdvVersao'),get token(){return token;},get usuario(){return usuario;},get aberto(){return estado.aberto;},get autenticado(){return !!usuario&&Date.now()<expira;}};
 })();
