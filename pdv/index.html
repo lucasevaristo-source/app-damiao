@@ -533,6 +533,7 @@ table.list{width:100%;border-collapse:collapse}
     <div class="fld"><label for="edQtd">Quantidade</label><input id="edQtd" inputmode="decimal" class="num"></div>
     <div class="fld"><label for="edPreco">Preço unitário (R$)</label><input id="edPreco" inputmode="decimal" class="num"></div><div id="edOriginal" class="hint"></div>
     <div class="fld"><label for="edDesc">Desconto no item (%)</label><input id="edDesc" inputmode="decimal" class="num"></div>
+    <div class="fld"><label for="edDescR">Desconto no item (R$)</label><input id="edDescR" inputmode="decimal" class="num" placeholder="0,00"></div><div id="edDescInfo" class="hint">Preencha em % ou em R$: um calcula o outro.</div>
   </div>
   <footer><button data-close style="color:var(--blue-ink)">Cancelar</button><button id="edOk" style="background:var(--blue);color:#fff">Salvar</button></footer>
 </div></div>
@@ -748,7 +749,7 @@ function renderCart(){
   if(!cart.itens.length)h+='<tr><td colspan="6"><div class="nada"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.2 9 12.8 2.4a1 1 0 0 0-1.6 0L6.8 9H2a1 1 0 0 0-1 1.3l2.5 9.3A2 2 0 0 0 5.5 21h13a2 2 0 0 0 2-1.4l2.5-9.3A1 1 0 0 0 22 9zM9 9l3-4.4L15 9zm3 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>Sem produtos</div></td></tr>';
   else h+=cart.itens.map((i,k)=>`<tr class="row${k===selRow?' sel':''}"><td><button class="rm" data-rm="${k}" aria-label="Remover ${esc(i.nome)}">−</button></td>
     <td class="n">${esc(i.nome)} <button class="ed" data-ed="${k}" aria-label="Editar ${esc(i.nome)}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.2V21h3.8l11-11-3.8-3.8zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.8 3.8z"/></svg></button></td>
-    <td class="num">${fq(i.qtd)} ${esc(i.unidade==='UN'?'Un':i.unidade)}</td><td class="num"><button class="preco-edit" data-preco="${k}" aria-label="Alterar preço de ${esc(i.nome)}">${R$(i.preco)}</button></td><td class="num">${(i.descPct||0).toFixed(2)}%</td><td class="num">${R$(itemTotal(i))}</td></tr>`).join('');
+    <td class="num">${fq(i.qtd)} ${esc(i.unidade==='UN'?'Un':i.unidade)}</td><td class="num"><button class="preco-edit" data-preco="${k}" aria-label="Alterar preço de ${esc(i.nome)}">${R$(i.preco)}</button></td><td class="num">${i.descPct?R$(Math.round(i.preco*i.qtd)-itemTotal(i))+' ('+(i.descPct).toLocaleString('pt-BR',{maximumFractionDigits:2})+'%)':'0,00%'}</td><td class="num">${R$(itemTotal(i))}</td></tr>`).join('');
   $('#cart').innerHTML=h+'</tbody></table>';
   const s=$('#cart tr.sel');if(s)s.scrollIntoView({block:'nearest'});
   $('#rProdLbl').textContent='Produtos'+(cart.itens.length?' ('+fqs(nItens())+')':'');$('#rProd').textContent=R$(semDesc());
@@ -766,8 +767,19 @@ $('#cart').addEventListener('click',e=>{
 
 /* editar item */
 let edK=-1;
-function editItem(k,preco=false){edK=k;const i=cart.itens[k];$('#edNome').textContent=i.nome;$('#edQtd').value=fqs(i.qtd);$('#edPreco').value=(i.preco/100).toFixed(2).replace('.',',');$('#edOriginal').textContent='Preço original deste item: '+R$(i.precoOriginal??i.preco);$('#edDesc').value=(i.descPct||0).toLocaleString('pt-BR');openModal('#mEdit');$(preco?'#edPreco':'#edQtd').select()}
-$('#edOk').onclick=()=>{try{const i=cart.itens[edK];const q=parseBR($('#edQtd').value)/100;const d=Math.min(100,Math.max(0,parseBR($('#edDesc').value)/100)),preco=PdvMoney.centavos($('#edPreco').value);
+/* desconto do item em % ou R$: o Bling recebe sempre em % (2 casas) */
+let edUlt='pct';
+function edBruto(){const q=parseBR($('#edQtd').value)/100;let p=0;try{p=PdvMoney.centavos($('#edPreco').value)}catch(e){}return Math.round(p*q)}
+function edSync(){const b=edBruto();
+  if(edUlt==='reais'){const r=Math.max(0,parseBR($('#edDescR').value));const pct=b?Math.min(100,Math.round(r/b*10000)/100):0;$('#edDesc').value=pct?pct.toLocaleString('pt-BR'):'0';}
+  const pct=Math.min(100,Math.max(0,parseBR($('#edDesc').value)/100)),real=b-Math.round(b*(1-pct/100));
+  if(edUlt==='pct')$('#edDescR').value=real?fmt(real):'';
+  $('#edDescInfo').textContent=pct?'Desconto de '+R$(real)+' ('+pct.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%) · item fica '+R$(b-real):'Preencha em % ou em R$: um calcula o outro.';}
+$('#edDesc').addEventListener('input',()=>{edUlt='pct';edSync()});
+$('#edDescR').addEventListener('input',()=>{edUlt='reais';edSync()});
+$('#edQtd').addEventListener('input',edSync);$('#edPreco').addEventListener('input',edSync);
+function editItem(k,preco=false){edK=k;const i=cart.itens[k];$('#edNome').textContent=i.nome;$('#edQtd').value=fqs(i.qtd);$('#edPreco').value=(i.preco/100).toFixed(2).replace('.',',');$('#edOriginal').textContent='Preço original deste item: '+R$(i.precoOriginal??i.preco);$('#edDesc').value=(i.descPct||0).toLocaleString('pt-BR');edUlt='pct';edSync();openModal('#mEdit');$(preco?'#edPreco':'#edQtd').select()}
+$('#edOk').onclick=()=>{try{edSync();const i=cart.itens[edK];const q=parseBR($('#edQtd').value)/100;const d=Math.min(100,Math.max(0,parseBR($('#edDesc').value)/100)),preco=PdvMoney.centavos($('#edPreco').value);
   if(preco<=0)throw Error('O preço unitário precisa ser maior que zero.');
   if(q<=0)cart.itens.splice(edK,1);else{if(i.precoOriginal==null)i.precoOriginal=i.preco;if(preco!==i.preco){i.precoAlteradoPor=PdvCaixa.usuario.nome;i.precoAlteradoEm=new Date().toISOString();}i.qtd=q;i.preco=preco;i.descPct=d}cart.pagamentos=[];closeModals();renderCart();focusScan();}catch(e){toast(e.message)}};
 $('#mEdit').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#edOk').click()}});
@@ -956,7 +968,7 @@ async function finalizarComCaixa(){
 }
 $('#btnFin').onclick=finalizar;
 function clearSale(keep){cart=newCart();selRow=-1;$('#busca').value='';$('#scan').value='';syncCpf('');setVal(0);renderNames();renderProds();renderCart();if(!keep)focusScan()}
-async function saveDraft(){try{await DB.put('meta',{id:'draft',v:{itens:cart.itens,cliente:cart.cliente,cpf:cart.cpf,descPct:cart.descPct,descVal:cart.descVal,taxa:cart.taxa||0,obs:cart.obs||''}})}catch(e){}}
+async function saveDraft(){try{await DB.put('meta',{id:'draft',v:{itens:cart.itens,cliente:cart.cliente,cpf:cart.cpf,descPct:cart.descPct,descVal:cart.descVal,taxa:cart.taxa||0,acrescimo:cart.acrescimo||0,obs:cart.obs||''}})}catch(e){}}
 async function loadDraft(){const d=await DB.get('meta','draft');if(d&&d.v&&d.v.itens&&d.v.itens.length){Object.assign(cart,d.v);syncCpf(cart.cpf||'');renderNames();toast('Venda em andamento recuperada');return true}return false}
 
 /* ================= comprovante ================= */
