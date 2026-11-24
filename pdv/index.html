@@ -89,6 +89,13 @@ main{flex:1;min-height:0;position:relative}
 .cats button[aria-pressed="true"]{background:var(--blue);color:#fff;font-weight:700}
 .cart{overflow:auto;border-bottom:1px solid var(--line)}
 table.items{width:100%;border-collapse:collapse}
+.abas-venda{display:flex;gap:6px;padding:6px 12px;background:#eef2fb;border-bottom:1px solid #dfe5f2;overflow-x:auto;flex:none}
+.abas-venda .aba{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:120px;max-width:220px;padding:6px 12px;border:1px solid #c9d3ea;border-radius:8px;background:#fff;color:#13213f;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.abas-venda .aba span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.abas-venda .aba small{font-weight:400;color:#5b6b8c;font-size:11.5px}
+.abas-venda .aba.on{background:#2563eb;border-color:#2563eb;color:#fff}.abas-venda .aba.on small{color:#dbe6ff}
+.abas-venda .aba.espera{border-color:#f59e0b;background:#fff8e6}
+.abas-venda .aba.nova{min-width:auto;justify-content:center;color:#2563eb;border-style:dashed}
 .items th{position:sticky;top:0;background:var(--bg);font-size:12px;color:var(--muted);font-weight:400;letter-spacing:.06em;text-transform:uppercase;text-align:right;padding:14px 12px;z-index:1;white-space:nowrap}
 .items th:nth-child(1),.items th:nth-child(2){text-align:left}
 .items td{padding:7px 12px;font-size:13px;text-align:right;white-space:nowrap}
@@ -388,6 +395,7 @@ table.list{width:100%;border-collapse:collapse}
         <div class="sbox"><input id="busca" placeholder="Buscar" autocomplete="off" aria-label="Buscar produto pelo nome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><div id="sug" class="sug" role="listbox" hidden></div></div>
         <div class="sbox code"><input id="scan" placeholder="Cód. de barras" autocomplete="off" aria-label="Código de barras"><button class="iconbtn" id="btnLimpar" title="Limpar a venda" aria-label="Limpar a venda"><svg viewBox="0 0 24 24" fill="#f44336"><path d="M6 7h12l-1 14H7zM9 3h6l1 2h4v2H4V5h4z"/></svg></button></div>
       </div>
+      <div class="abas-venda" id="abasVenda" aria-label="Vendas abertas"></div>
       <div class="bal">
         <nav class="cats" id="cats" aria-label="Categorias"></nav>
         <div class="cart" id="cart"></div>
@@ -640,6 +648,20 @@ let CFG={...DEF_CFG};
 let CAT={produtos:[],clientes:[],formas:[],listas:[],vendedores:[]};
 let IDX={cod:new Map()};
 let cart=newCart();
+/* abas de venda: várias vendas abertas ao mesmo tempo; a aba ativa é sempre o "cart" */
+let abas=[{id:uid(),cart}],abaAtiva=0;
+const totalDe=c=>{const t=cart;cart=c;try{return total()}finally{cart=t}};
+const vendasEmEspera=()=>abas.filter((a,k)=>k!==abaAtiva&&a.cart.itens.length).length;
+function renderAbas(){abas[abaAtiva].cart=cart;const el=document.getElementById('abasVenda');if(!el)return;
+  el.innerHTML=abas.map((a,k)=>{const c=a.cart,on=k===abaAtiva;return `<button type="button" class="aba${on?' on':c.itens.length?' espera':''}" data-aba="${k}" title="${on?'Venda atual':'Retomar esta venda'}"><span>${esc(c.cliente?cliNome(c.cliente):'Venda '+(k+1))}</span><small>${c.itens.length?(on?'':'Em espera · ')+R$(totalDe(c)):'vazia'}</small></button>`}).join('')+(abas.length<8?'<button type="button" class="aba nova" data-aba="nova" title="Deixar esta venda em espera e começar outra">+ Nova venda</button>':'');}
+function trocarAba(k){if(k===abaAtiva)return;if(screen==='pagamento'){toast('Conclua ou volte do pagamento antes de trocar de venda.');return}
+  abas[abaAtiva].cart=cart;const vazia=!cart.itens.length&&abas.length>1;abaAtiva=k;cart=abas[k].cart;
+  if(vazia){const tirar=abas.findIndex(a=>a.cart!==cart&&!a.cart.itens.length);if(tirar>=0){abas.splice(tirar,1);abaAtiva=abas.findIndex(a=>a.cart===cart);}}
+  selRow=-1;$('#busca').value='';$('#scan').value='';syncCpf(cart.cpf||'');renderNames();renderProds();renderCart();focusScan();}
+function novaAba(){if(!cart.itens.length){toast('Esta venda ainda está vazia: use ela para o próximo cliente.');focusScan();return}
+  if(abas.length>=8){toast('Limite de 8 vendas abertas. Finalize uma antes.');return}
+  abas[abaAtiva].cart=cart;abas.push({id:uid(),cart:newCart()});trocarAba(abas.length-1);toast('Venda anterior em espera. Clique na aba dela para retomar.');}
+document.addEventListener('click',e=>{const b=e.target.closest('#abasVenda [data-aba]');if(!b)return;b.dataset.aba==='nova'?novaAba():trocarAba(+b.dataset.aba);});
 let screen='inicio', catSel=null, selRow=-1;
 function newCart(){return{itens:[],cliente:null,cpf:'',descPct:0,descVal:0,taxa:0,acrescimo:0,obs:'',pagamentos:[],forma:null}}
 
@@ -755,7 +777,7 @@ function renderCart(){
   $('#rProdLbl').textContent='Produtos'+(cart.itens.length?' ('+fqs(nItens())+')':'');$('#rProd').textContent=R$(semDesc());
   renderExtras();$('#rTot').textContent=R$(total());
   $('#btnPagar').classList.toggle('ready',cart.itens.length>0);
-  saveDraft();
+  renderAbas();saveDraft();
 }
 $('#cart').addEventListener('click',e=>{
   const b=e.target.closest('button');if(b){
@@ -967,9 +989,13 @@ async function finalizarComCaixa(){
   }catch(e){toast(e.message);}finally{finalizando=false}
 }
 $('#btnFin').onclick=finalizar;
-function clearSale(keep){cart=newCart();selRow=-1;$('#busca').value='';$('#scan').value='';syncCpf('');setVal(0);renderNames();renderProds();renderCart();if(!keep)focusScan()}
-async function saveDraft(){try{await DB.put('meta',{id:'draft',v:{itens:cart.itens,cliente:cart.cliente,cpf:cart.cpf,descPct:cart.descPct,descVal:cart.descVal,taxa:cart.taxa||0,acrescimo:cart.acrescimo||0,obs:cart.obs||''}})}catch(e){}}
-async function loadDraft(){const d=await DB.get('meta','draft');if(d&&d.v&&d.v.itens&&d.v.itens.length){Object.assign(cart,d.v);syncCpf(cart.cpf||'');renderNames();toast('Venda em andamento recuperada');return true}return false}
+function clearSale(keep){cart=newCart();abas[abaAtiva].cart=cart;selRow=-1;$('#busca').value='';$('#scan').value='';syncCpf('');setVal(0);renderNames();renderProds();renderCart();if(!keep)focusScan()}
+const rascunho=c=>({itens:c.itens,cliente:c.cliente,cpf:c.cpf,descPct:c.descPct,descVal:c.descVal,taxa:c.taxa||0,acrescimo:c.acrescimo||0,obs:c.obs||''});
+async function saveDraft(){try{abas[abaAtiva].cart=cart;await DB.put('meta',{id:'draft',v:{...rascunho(cart),abas:abas.map(a=>rascunho(a.cart)),ativa:abaAtiva}})}catch(e){}}
+async function loadDraft(){const d=await DB.get('meta','draft');if(!d||!d.v)return false;
+  const lista=(Array.isArray(d.v.abas)&&d.v.abas.length?d.v.abas:[d.v]).filter(v=>v&&v.itens&&v.itens.length);if(!lista.length)return false;
+  abas=lista.map(v=>({id:uid(),cart:Object.assign(newCart(),v,{pagamentos:[]})}));abaAtiva=Math.min(Math.max(0,+d.v.ativa||0),abas.length-1);cart=abas[abaAtiva].cart;
+  syncCpf(cart.cpf||'');renderNames();toast(abas.length>1?abas.length+' vendas em andamento recuperadas':'Venda em andamento recuperada');return true}
 
 /* ================= comprovante ================= */
 function receiptHTML(v){
