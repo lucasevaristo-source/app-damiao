@@ -16,7 +16,7 @@ body.pdv-locked .app{visibility:hidden;pointer-events:none}#pdvLogin{position:fi
 .fechamento-dinheiro input{width:100%;min-width:0;border:0;background:transparent;box-shadow:none;border-radius:0;padding:4px 0 5px;color:#555;font-size:16px;letter-spacing:1px;outline:none}
 .fechamento-enviar{width:100%;height:44px;margin-top:26px;border:0;border-radius:2px;background:#2196f3;color:white;font-size:16px;font-weight:400;text-transform:uppercase;cursor:pointer}
 .fechamento-enviar:disabled{opacity:.55;cursor:wait}
-.fechamento-erro{margin:14px 0 0;color:#b91c1c;font-size:14px;line-height:1.5}
+.fechamento-erro{white-space:pre-line;margin:14px 0 0;color:#b91c1c;font-size:14px;line-height:1.5}
 .fechamento-observacao{margin-top:20px;max-width:760px}
 .fechamento-observacao textarea{width:100%;min-height:76px;padding:10px;border:1px solid #aaa;border-radius:2px;font:inherit;resize:vertical;box-sizing:border-box}
 .fechamento-observacao p{font-size:13px;line-height:1.5;color:#666}
@@ -45,3 +45,4 @@ body.pdv-locked .app{visibility:hidden;pointer-events:none}#pdvLogin{position:fi
 .fechamento-recibo footer{font-size:8pt;margin-top:1mm}.fechamento-recibo footer span{display:block;margin-top:.5mm}
 .fr-tabela tbody tr:first-child td{font-size:11pt}.fr-linha:has(+.fr-resultado)>:last-child{font-size:12pt}
 @media print{.fechamento-recibo .fr-titulo,.fechamento-recibo .fr-linha,.fechamento-recibo tr{break-inside:avoid}}
+.caixa-erro{white-space:pre-line}
