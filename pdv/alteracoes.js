@@ -8,7 +8,7 @@ const PdvAlteracoes=(()=>{
     const v=await DB.get('vendas',id);
     if(!v||!PdvCaixa.diaPermitido(v.dia)){toast('Seu acesso permite somente vendas de hoje.');return;}
     await PdvCaixa.atualizar();if(!PdvCaixa.aberto||v.caixaSessaoId!==PdvCaixa.aberto.id){toast('Caixa fechado: esta venda não pode mais ser alterada.');return;}
-    if(v.status==='cancelada'){toast('Esta venda já foi excluída.');return;}
+    if(v.status==='cancelada'&&!v.alteracaoPendente){toast('Esta venda já foi excluída.');return;}
     if(cart.itens.length){toast('Conclua ou limpe a venda em andamento antes de corrigir outra.');return;}
     if(v.alteracaoPendente){tipo=v.alteracaoPendente.tipo;}
     if(v.status==='pendente'||v.status==='erro'){await Sync.enviar();const salva=await DB.get('vendas',id);if(salva.status!=='registrada'){toast('Aguarde o registro desta venda no caixa antes de corrigir.');return;}return abrir(id,tipo);}

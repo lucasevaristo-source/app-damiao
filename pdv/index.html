@@ -1088,7 +1088,7 @@ async function renderVendas(){
    (vs.map(v=>`<tr><td class="num">${esc(v.numero)}</td><td class="num">${new Date(v.criadaEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td>
    <td>${esc(v.cliente?(v.cliente.fantasia||v.cliente.nome):'Consumidor final')}</td><td>${esc(v.pagamentos.map(p=>p.nome).join(' + '))}</td>
    <td class="r num">${R$(v.total)}</td><td><span class="tag ${v.status}">${statusTxt(v.status)}${v.bling&&v.bling.numero?' · nº '+esc(v.bling.numero):''}</span>${v.erro?`<div class="hint" style="white-space:normal;max-width:280px">${esc(v.erro)}</div>`:''}</td>
-   <td><button class="lnk" data-ver="${v.id}">Ver</button>${v.status!=='cancelada'&&!v.bling&&PdvCaixa.aberto?.id===v.caixaSessaoId?`<button class="lnk" data-edit="${v.id}">${v.alteracaoPendente?'Retomar correção':'Editar'}</button><button class="lnk" style="color:var(--red)" data-excluir="${v.id}">Cancelar</button>`:''}</td></tr>`).join('')||
+   <td><button class="lnk" data-ver="${v.id}">Ver</button>${PdvCaixa.aberto?.id!==v.caixaSessaoId?'':v.alteracaoPendente?`<button class="lnk" data-edit="${v.id}">Retomar correção</button>${PdvCaixa.admin()?`<button class="lnk" style="color:var(--red)" data-descartar="${v.id}">Descartar correção</button>`:''}`:v.status!=='cancelada'&&!v.bling?`<button class="lnk" data-edit="${v.id}">Editar</button><button class="lnk" style="color:var(--red)" data-excluir="${v.id}">Cancelar</button>`:''}</td></tr>`).join('')||
    '<tr><td colspan="7"><div class="nada" style="padding:24px">Nenhuma venda nesta data</div></td></tr>')+'</tbody>';
 }
 $('#fData').onchange=renderVendas;$('#fStatus').onchange=renderVendas;$('#btnSend').onclick=enviarAgora;
@@ -1097,6 +1097,12 @@ $('#tVendas').addEventListener('click',async e=>{
   if(b.dataset.ver)showReceipt(await DB.get('vendas',b.dataset.ver),false);
   if(b.dataset.edit)PdvAlteracoes.abrir(b.dataset.edit,'editar');
   if(b.dataset.excluir)PdvAlteracoes.abrir(b.dataset.excluir,'excluir');
+  if(b.dataset.descartar){
+    if(!PdvCaixa.admin()){toast('Somente o Master pode descartar uma correção.');return;}
+    if(!b.dataset.confirmar){b.dataset.confirmar='1';b.textContent='Clique de novo para descartar';setTimeout(()=>{if(b.isConnected){delete b.dataset.confirmar;b.textContent='Descartar correção';}},6000);return;}
+    try{await PdvCaixa.lock(async()=>{const v=await DB.get('vendas',b.dataset.descartar);if(!v||!v.alteracaoPendente)return;v.historicoAlteracoes=[...(v.historicoAlteracoes||[]),{descartada:true,tipo:v.alteracaoPendente.tipo,motivo:v.alteracaoPendente.motivo,em:new Date().toISOString(),por:PdvCaixa.usuario?.nome||'Master'}];delete v.alteracaoPendente;await DB.put('vendas',v);});
+      toast('Correção descartada. A venda ficou como estava antes da correção.');updateQueue();await renderVendas();}catch(x){toast(x.message);}
+  }
 });
 
 /* ================= caixa do dia ================= */
