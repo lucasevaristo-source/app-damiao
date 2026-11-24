@@ -1033,12 +1033,13 @@ const Sync={
     await DB.put('meta',{id:'sync',v:{em:new Date().toISOString(),demo:false,versao:j.versao||''}});
     await loadCat();return prods.length;
   },
-  async enviar(jaTravado=false){return jaTravado?this.enviarInterno():PdvCaixa.lock(()=>this.enviarInterno());},
+  async temTrabalho(){return (await DB.all('vendas')).some(v=>!v.alteracaoPendente&&v.caixaSessaoId&&(v.status==='pendente'||(v.status==='erro'&&v.tentativas<20)||v.status==='fechada'||v.status==='conferencia'));},
+  async enviar(jaTravado=false){if(!(await this.temTrabalho()))return;return jaTravado?this.enviarInterno():PdvCaixa.lock(()=>this.enviarInterno());},
   async enviarInterno(){
-    if(this.busy||!CFG.url||!navigator.onLine||!PdvCaixa.autenticado)return;this.busy=true;
+    if(this.busy||!CFG.url||!navigator.onLine||!PdvCaixa.autenticado)return;this.busy=true;let enviou=false;
     try{
       const pend=(await DB.all('vendas')).filter(v=>!v.alteracaoPendente&&v.caixaSessaoId&&(v.status==='pendente'||(v.status==='erro'&&v.tentativas<20))).sort((a,b)=>a.criadaEm.localeCompare(b.criadaEm));
-      for(const v of pend){
+      for(const v of pend){enviou=true;
         try{
           const j=await this.req('venda',{venda:PdvAlteracoes.payload(v)});
           v.status=j.legado?'enviada':'registrada';v.erro='';v.revisao=j.revisao??v.revisao??0;if(j.pedidoId)v.bling={pedidoId:j.pedidoId,numero:j.numero};
@@ -1047,7 +1048,7 @@ const Sync={
         await DB.put('vendas',v);
       }
     await PdvCaixa.conferirVendas();
-    }finally{this.busy=false;updateQueue();if(screen==='vendas')renderVendas();if(PdvCaixa.autenticado&&navigator.onLine)PdvCaixa.atualizar().catch(()=>{});}
+    }finally{this.busy=false;updateQueue();if(screen==='vendas')renderVendas();if(enviou&&PdvCaixa.autenticado&&navigator.onLine)PdvCaixa.atualizar().catch(()=>{});}
   }
 };
 async function enviarAgora(){if(!CFG.url){toast('Ligue ao Bling em Configurações primeiro');return}if(!navigator.onLine){toast('Sem internet. As vendas vão quando a conexão voltar.');return}
