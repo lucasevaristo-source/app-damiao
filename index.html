@@ -1446,7 +1446,7 @@ async function vPedidos(){
 const diasPrazo=n=>{const m=String(n||'').match(/(\d+)\s*(dias|dia|dd|d)\b/i);return m?+m[1]:0};
 const formaAPrazo=f=>!!f&&(/boleto|faturad|carteira|prazo/i.test(f.nome||'')||diasPrazo(f.nome)>0);
 const hojeISO=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
-const vencPadrao=f=>{const d=new Date();d.setDate(d.getDate()+diasPrazo(f&&f.nome));return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const vencPadrao=(f,base)=>{const d=base?new Date(base+'T12:00:00'):new Date();d.setDate(d.getDate()+(formaAPrazo(f)?diasPrazo(f&&f.nome):0));return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 const brData=s=>s?String(s).slice(0,10).split('-').reverse().join('/'):'';
 /* situações que a equipe escolhe; as antigas (Recebido, Faturado...) contam como Em separação */
 const SITUACOES=['Em separação','Entregue','Cancelado'];
@@ -1458,16 +1458,16 @@ async function vNovo(pedido=null,onChange=null){
   const chave=(pedido?'dm_editar_pedido_'+pedido.id+'_':'dm_novo_pedido_')+ME.id;
   let draft;try{draft=JSON.parse(store.get(chave)||'null')}catch(e){}
   if(pedido&&draft&&(+draft.revisao||0)!==(+pedido.revisao||0))draft=null;
-  draft=draft||(pedido?{clienteId:String(pedido.clienteId),formaPagamentoId:pedido.formaPagamentoId||'',vencimento:pedido.vencimento||'',obs:pedido.obs||'',itens:pedido.itens.map(i=>({...i})),descontoTotal:+pedido.desconto||0,revisao:+pedido.revisao||0,enviado:false}:{clienteId:'',formaPagamentoId:'',obs:'',itens:[],enviado:false});
+  draft=draft||(pedido?{clienteId:String(pedido.clienteId),formaPagamentoId:pedido.formaPagamentoId||'',vencimento:pedido.vencimento||'',vencManual:!!pedido.vencimento,obs:pedido.obs||'',itens:pedido.itens.map(i=>({...i})),descontoTotal:+pedido.desconto||0,revisao:+pedido.revisao||0,enviado:false}:{clienteId:'',formaPagamentoId:'',obs:'',itens:[],enviado:false});
   draft.idEnvio=draft.idEnvio||crypto.randomUUID();draft.idOperacao=draft.idOperacao||crypto.randomUUID();
   let clientes=[],cliente=null,cat=null,formas=[],buscando=false,ocupado=false,selecionado=null,sugestoes=[],ativo=0,geracao=0;
   const gravar=()=>store.set(chave,JSON.stringify(draft));
   const formaAtual=()=>formas.find(f=>String(f.id)===String(draft.formaPagamentoId));
-  function mostrarVenc(){const f=formaAtual(),prazo=formaAPrazo(f);el('#npvencwrap').hidden=!prazo;el('#npvenc').min=pedido?'':hojeISO();if(prazo){if(!draft.vencimento)draft.vencimento=vencPadrao(f);el('#npvenc').value=draft.vencimento;}else draft.vencimento='';}
+  function mostrarVenc(){const f=formaAtual();el('#npvencwrap').hidden=!f;if(f){if(!draft.vencimento)draft.vencimento=vencPadrao(f,el('#npdata')&&el('#npdata').value);el('#npvenc').value=draft.vencimento;}else draft.vencimento='';}
   M().innerHTML=`<div class="ph"><div><h1>${pedido?'Editar pedido #'+esc(pedido.numero):'Novo pedido'}</h1><p>${pedido?'Ajuste os produtos e confira o resumo. As alterações ficam no App. O envio ao Bling ocorre após a entrega.':'Escolha o cliente, adicione os produtos e confira o resumo.'}</p></div><div class="toolbar"><button class="btn o sm" id="npvoltar">Voltar</button><button class="btn o sm" id="npsalvar">Salvar rascunho</button><button class="btn sm" id="npfinaltop" disabled>${pedido?'Salvar alterações':'Finalizar pedido'}</button></div></div>
     <div id="npaviso" role="status" aria-live="polite"></div>
     <section class="card np-cabecalho"><div id="npclientearea"><label class="np-label" for="npcliente">Cliente</label><div class="np-busca-wrap"><input class="inp" id="npcliente" placeholder="Digite o nome, documento ou cidade" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="npclientes"><div id="npclientes" class="np-sugestoes" hidden></div></div></div>
-      <div class="np-campos"><div class="field"><label for="npdata">Data do pedido</label><input type="date" class="inp" id="npdata"></div><div class="field"><label>Tipo do pedido</label><div class="np-fixo">Pedido de venda</div></div><div class="field"><label for="nppagamento">Forma de pagamento</label><select id="nppagamento" disabled><option value="">Selecione o cliente</option></select></div><div class="field" id="npvencwrap" hidden><label for="npvenc">Vencimento (a prazo)</label><input type="date" class="inp" id="npvenc"></div><div class="field"><label>Tabela de preço</label><div class="np-fixo" id="nptabela">Selecione o cliente</div></div><div class="field"><label>Estoque</label><div class="np-fixo">Estoque padrão</div></div></div>
+      <div class="np-campos"><div class="field"><label for="npdata">Data do pedido</label><input type="date" class="inp" id="npdata"></div><div class="field"><label>Tipo do pedido</label><div class="np-fixo">Pedido de venda</div></div><div class="field"><label for="nppagamento">Forma de pagamento</label><select id="nppagamento" disabled><option value="">Selecione o cliente</option></select></div><div class="field" id="npvencwrap" hidden><label for="npvenc">Vencimento</label><input type="date" class="inp" id="npvenc"></div><div class="field"><label>Tabela de preço</label><div class="np-fixo" id="nptabela">Selecione o cliente</div></div><div class="field"><label>Estoque</label><div class="np-fixo">Estoque padrão</div></div></div>
     </section>
     <div class="np-layout"><div class="np-coluna"><section class="card np-itens"><div class="np-titulo"><h3>Itens do pedido</h3><button class="btn o sm" id="npcatalogo" disabled>Explorar catálogo</button></div>
       <label class="np-com-saldo"><input type="checkbox" id="npsaldo"> Apenas com saldo</label>
@@ -1478,7 +1478,7 @@ async function vNovo(pedido=null,onChange=null){
   const el=s=>$(s),fmt=v=>Number(v).toLocaleString('pt-BR',{maximumFractionDigits:3});
   const dataOriginal=pedido&&pedido.data?(d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10))(new Date(pedido.data)):'';
   el('#npdata').max=hojeISO();el('#npdata').value=draft.dataPedido||dataOriginal||hojeISO();
-  el('#npdata').onchange=()=>{const v=el('#npdata').value;if(v&&v>hojeISO()){toast('A data do pedido não pode ser no futuro.');el('#npdata').value=draft.dataPedido||dataOriginal||hojeISO();return}draft.dataPedido=v;gravar();};
+  el('#npdata').onchange=()=>{const v=el('#npdata').value;if(v&&v>hojeISO()){toast('A data do pedido não pode ser no futuro.');el('#npdata').value=draft.dataPedido||dataOriginal||hojeISO();return}if(!draft.vencManual){draft.vencimento='';mostrarVenc();}draft.dataPedido=v;gravar();};
   function controles(){
     const pronto=!!cliente&&!!cat&&!buscando&&!ocupado&&!draft.enviado;
     ['#npproduto','#npquantidade','#npcatalogo','#nppagamento','#npsaldo','#npvenc'].forEach(s=>el(s).disabled=!pronto);
@@ -1584,7 +1584,7 @@ async function vNovo(pedido=null,onChange=null){
     el('#npdtr').onchange=()=>sincr('r');el('#npdtp').onchange=()=>sincr('p');}
   el('#npitens').oninput=e=>{if(e.target.dataset.npq===undefined||ocupado||draft.enviado)return;const n=+e.target.dataset.npq,q=estoqueValor(e.target.value);if(!Number.isFinite(q)||q<=0||q>1000000){e.target.setCustomValidity('Informe uma quantidade maior que zero.');return}e.target.setCustomValidity('');draft.itens[n].qtd=q;const t=el('[data-nptotal="'+n+'"]');if(t)t.textContent=R$(Math.round(q*draft.itens[n].preco*100)/100);gravar();totais();};
   el('#npitens').onclick=e=>{if(ocupado||draft.enviado)return;const b=e.target.closest('[data-npremover]');if(b){draft.itens.splice(+b.dataset.npremover,1);gravar();itens();}};
-  el('#nppagamento').onchange=()=>{draft.formaPagamentoId=el('#nppagamento').value;draft.vencimento='';mostrarVenc();gravar();};el('#npvenc').onchange=()=>{draft.vencimento=el('#npvenc').value;gravar();};el('#npobs').oninput=()=>{draft.obs=el('#npobs').value;gravar();};
+  el('#nppagamento').onchange=()=>{draft.formaPagamentoId=el('#nppagamento').value;draft.vencimento='';draft.vencManual=false;mostrarVenc();gravar();};el('#npvenc').onchange=()=>{draft.vencimento=el('#npvenc').value;draft.vencManual=true;gravar();};el('#npobs').oninput=()=>{draft.obs=el('#npobs').value;gravar();};
   const salvarRascunho=()=>{gravar();toast('Rascunho salvo. Você pode continuar depois neste navegador.');};el('#npsalvar').onclick=salvarRascunho;el('#nprascunho').onclick=salvarRascunho;
   el('#npvoltar').onclick=()=>{if(!ocupado){gravar();VIEW='pedidos';vPedidos();}};
   el('#npcatalogo').onclick=()=>{
@@ -1596,10 +1596,10 @@ async function vNovo(pedido=null,onChange=null){
     if($$('#npitens input').some(e=>!e.checkValidity())){toast('Confira a quantidade dos produtos.');return}
     if(selecionado){toast('Adicione o produto selecionado antes de finalizar.');return}
     const dataPed=el('#npdata').value;if(!/^\d{4}-\d{2}-\d{2}$/.test(dataPed)||dataPed>hojeISO()){toast('Confira a data do pedido (hoje ou antes).');el('#npdata').focus();return}
-    if(formaAPrazo(formaAtual())&&!/^\d{4}-\d{2}-\d{2}$/.test(draft.vencimento||'')){toast('Informe a data de vencimento do pagamento a prazo.');el('#npvenc').focus();return}
+    if(formaAtual()&&!/^\d{4}-\d{2}-\d{2}$/.test(draft.vencimento||'')){toast('Informe a data de vencimento do pagamento.');el('#npvenc').focus();return}
     ocupado=true;draft.enviado=true;gravar();controles();el('#npfinalizar').textContent='Enviando pedido…';
     try{
-      const dados={idEnvio:draft.idEnvio,clienteId:cliente.id,itens:draft.itens.map(i=>PP?{produtoId:i.produtoId,qtd:i.qtd,preco:i.preco}:{produtoId:i.produtoId,qtd:i.qtd}),obs:draft.obs,formaPagamentoId:draft.formaPagamentoId,vencimento:formaAPrazo(formaAtual())?draft.vencimento:''};if(!pedido||dataPed!==dataOriginal)dados.dataPedido=dataPed;if(PP)dados.descontoTotal=+draft.descontoTotal||0;
+      const dados={idEnvio:draft.idEnvio,clienteId:cliente.id,itens:draft.itens.map(i=>PP?{produtoId:i.produtoId,qtd:i.qtd,preco:i.preco}:{produtoId:i.produtoId,qtd:i.qtd}),obs:draft.obs,formaPagamentoId:draft.formaPagamentoId,vencimento:formaAtual()?draft.vencimento:''};if(!pedido||dataPed!==dataOriginal)dados.dataPedido=dataPed;if(PP)dados.descontoTotal=+draft.descontoTotal||0;
       if(pedido){dados.id=pedido.id;dados.idOperacao=draft.idOperacao;dados.revisao=draft.revisao;}
       const r=await api(pedido?'editarPedido':'pedidoPainelEnviar',dados);
       store.del(chave);M().innerHTML=`<div class="ph"><div><h1>${pedido?'Pedido atualizado':'Pedido enviado'}</h1><p>Pedido #${esc(r.numero)} de ${esc(cliente.fantasia||cliente.nome)}</p></div></div><div class="card" style="padding:24px;display:flex;flex-direction:column;gap:16px"><div class="msg ok">Pedido #${esc(r.numero)} ${pedido?'atualizado':'recebido'} · ${R$(r.total)}</div><p>${pedido?(pedido.blingNumero?'A alteração foi confirmada no mesmo pedido do Bling.':'As alterações foram salvas no pedido.'):'Confira o pedido e a integração com o Bling na lista de Pedidos.'}</p><div class="toolbar"><button class="btn" id="npverpedidos">Ver pedidos</button><button class="btn o" id="npnovamente">Novo pedido</button></div></div>`;el('#npverpedidos').onclick=()=>vPedidos();el('#npnovamente').onclick=()=>vNovo();
