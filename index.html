@@ -674,12 +674,14 @@ function detalhePedido(p,equipe,onChange){
    ${p.erroBling?`<div class="msg bad">Não foi para o Bling: ${esc(p.erroBling)}</div>`:''}
    <div class="scroll"><table class="t"><thead><tr><th>Produto</th><th class="r">Qtd.</th><th class="r">Preço</th><th class="r">Total</th></tr></thead><tbody>${p.itens.map(i=>`<tr><td>${esc(i.nome)}<div style="font-size:12px;color:var(--muted)">${esc(i.codigo)}</div></td><td class="r num">${i.qtd}</td><td class="r num">${R$(i.preco)}</td><td class="r num">${R$(i.total)}</td></tr>`).join('')}</tbody></table></div>
    ${p.desconto?`<div style="display:flex;justify-content:space-between;font-size:14px;color:#15803d"><span>Desconto${p.cupom?' (cupom '+esc(p.cupom)+')':''}</span><span class="num">-${R$(p.desconto)}</span></div>`:''}${p.frete?`<div style="display:flex;justify-content:space-between;font-size:14px"><span>Frete</span><span class="num">${R$(p.frete)}</span></div>`:''}<div class="tot"><span>Total</span><span class="num">${R$(p.total)}</span></div>
+   <div id="pdpag" style="font-size:14px"><b>Forma de pagamento:</b> ${p.formaPagamentoId?'…':'Combinar na entrega'}${p.vencimento?` · <b>Vencimento:</b> ${brData(p.vencimento)}`:''}</div>
    ${p.obs?`<div class="msg info">Obs.: ${esc(p.obs)}</div>`:''}
-   ${equipe?`<div class="grid2" style="align-items:end"><div class="field"><label for="ps">Situação</label><select id="ps" ${p.status==='Entregue'?'disabled':''}>${['Recebido','Em separação','Em rota','Faturado','Entregue'].concat(OPER()?[]:['Cancelado']).map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}</select></div><button class="btn" id="psv" ${p.status==='Entregue'?'disabled':''}>Salvar situação</button></div>
+   ${equipe?`<div class="grid2" style="align-items:end"><div class="field"><label for="ps">Situação</label><select id="ps" ${p.status==='Entregue'?'disabled':''}>${[...new Set([situacaoVisivel(p.status),'Em separação','Entregue'].concat(OPER()?[]:['Cancelado']))].map(s=>`<option ${s===situacaoVisivel(p.status)?'selected':''}>${s}</option>`).join('')}</select></div><button class="btn" id="psv" ${p.status==='Entregue'?'disabled':''}>Salvar situação</button></div>
    ${p.status==='Entregue'?`<div class="msg info">Pedido imutável. Bling: ${esc(p.syncEstado||'aguardando conferência')}${p.erroBling?' · '+esc(p.erroBling):''}</div>${p.syncEstado!=='sincronizado'?'<button class="btn y" id="pbl">Verificar sincronização</button>':''}`:''}`:''}
    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="ppdfv">Visualizar / imprimir PDF</button><button class="btn o" id="ppdfb">Baixar PDF</button>${equipe?'<button class="btn" id="ppdfw" style="background:#16a34a">Enviar no WhatsApp</button>':''}</div>
    ${equipe?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id="pimp">Imprimir na Elgin (térmica)</button><button class="btn o" id="petq">Etiquetas das caixas</button>${pedEditavel(p)?'<button class="btn o" id="ped">Editar pedido</button>':''}${GESTAO()&&p.status!=='Cancelado'&&p.status!=='Entregue'?'<button class="btn o" id="pexc" style="color:var(--red);border-color:#f3b4b4">Excluir pedido</button>':''}</div>`:''}
   </div>`,{wide:true});
+  if(p.formaPagamentoId)api('formasPagamento',{},true).then(fs=>{const f=fs.find(x=>String(x.id)===String(p.formaPagamentoId)),d=m.querySelector('#pdpag');if(d)d.innerHTML=`<b>Forma de pagamento:</b> ${esc(f?f.nome:'forma nº '+p.formaPagamentoId)}${p.vencimento?` · <b>Vencimento:</b> ${brData(p.vencimento)}`:''}`}).catch(()=>{});
   m.querySelector('#ppdfv').onclick=e=>pedidoPdfAcao(p,'ver',e.currentTarget);m.querySelector('#ppdfb').onclick=e=>pedidoPdfAcao(p,'baixar',e.currentTarget);
   if(equipe){
     m.querySelector('#ppdfw').onclick=e=>pedidoPdfAcao(p,'whats',e.currentTarget);
@@ -687,7 +689,7 @@ function detalhePedido(p,equipe,onChange){
     m.querySelector('#petq').onclick=()=>{m.fechar();etiquetasPedidos([p])};
     const pe=m.querySelector('#ped');if(pe)pe.onclick=()=>{m.fechar();editarPedido(p,onChange)};
     const px=m.querySelector('#pexc');if(px)px.onclick=()=>{m.fechar();excluirPedidos([p],onChange)};
-    m.querySelector('#psv').onclick=async()=>{try{await api('mudarStatusPedido',{id:p.id,revisao:p.revisao,status:m.querySelector('#ps').value});toast('Situação atualizada');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
+    m.querySelector('#psv').onclick=async()=>{const nv=m.querySelector('#ps').value;if(nv===situacaoVisivel(p.status)){m.fechar();return}if(nv==='Entregue'&&!confirm('Marcar o pedido #'+p.numero+' como Entregue? Ele será enviado ao Bling e não poderá mais ser alterado.'))return;try{await api('mudarStatusPedido',{id:p.id,revisao:p.revisao,status:m.querySelector('#ps').value});toast('Situação atualizada');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
     const b=m.querySelector('#pbl');if(b)b.onclick=async()=>{try{await api('enviarPedidoBling',{id:p.id});toast('Sincronização solicitada; confira a situação do pedido');m.fechar();onChange&&onChange()}catch(x){falha(x)}};
   }
 }
@@ -913,7 +915,7 @@ let FORMAS_PDF=null;
 async function pdfPedido(p){
   await Promise.all([carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js')]);
   if(!FORMAS_PDF){try{FORMAS_PDF=await api('formasPagamento',{},true)}catch(e){FORMAS_PDF=[]}}
-  const forma=(FORMAS_PDF.find(f=>String(f.id)===String(p.formaPagamentoId))||{}).nome||(p.formaPagamentoId?'':'A combinar');
+  const forma=(FORMAS_PDF.find(f=>String(f.id)===String(p.formaPagamentoId))||{}).nome||(p.formaPagamentoId?'':'A combinar')+(p.vencimento?' · venc. '+brData(p.vencimento):'');
   const {jsPDF}=window.jspdf,d=new jsPDF({unit:'mm',format:'a4'});
   const W=210,H=297,X=8,R=W-8,num=String(p.numero||'').padStart(6,'0');
   const br=v=>'R$'+(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1403,7 +1405,7 @@ function comprovantePedido(p){
 function imprimirPedidosSelecionados(pedidos){if(!pedidos.length){toast('Selecione pelo menos um pedido.');return}imprimir(pedidos.map(comprovantePedido).join(''),'size:auto;margin:0');}
 function imprimirPedido(p){imprimirPedidosSelecionados([p]);}
 async function vPedidos(){
-  const STATUS_PED=['Recebido','Em separação','Enviado ao Bling','Faturado','Em rota','Entregue','Cancelado'];
+  const STATUS_PED=SITUACOES;
   M().innerHTML=`<div class="ph"><div><h1>Pedidos</h1><p>${ME.papel==='vendedor'?'Pedidos dos seus clientes':'Todos os pedidos do App'}</p></div><button class="btn" id="pn">${ICON.novo.replace('<svg','<svg width="18" height="18"')}Novo pedido</button></div>
     <div class="toolbar"><input class="inp" id="pb" placeholder="Buscar cliente, pedido ou cidade" aria-label="Buscar pedidos"><select class="inp" id="pf" style="flex:0 0 220px" aria-label="Situação do pedido"><option value="">Todas as situações</option>${STATUS_PED.map(s=>`<option>${esc(s)}</option>`).join('')}</select>${ME.papel!=='vendedor'?'<select class="inp" id="pv" style="flex:0 0 220px" aria-label="Vendedor"><option value="">Todos os vendedores</option></select>':''}</div>
     <div id="presumo" style="font-size:13px;color:var(--muted);margin:6px 2px"></div>
@@ -1413,9 +1415,9 @@ async function vPedidos(){
   const atualizarSelecao=()=>{const n=selecionados.size;$('#pselnumero').textContent=n?n+' pedido'+(n===1?' selecionado':'s selecionados'):'Nenhum pedido selecionado';$('#pimprimir').disabled=!n;$('#plimpar').disabled=!n;$('#petiq').disabled=!n;$('#pstl').disabled=!n;$('#pstok').disabled=!n;if($('#pexcluir'))$('#pexcluir').disabled=!n;const all=$('#pall');if(all){all.checked=visiveis.length>0&&visiveis.every(p=>selecionados.has(String(p.id)));all.indeterminate=visiveis.some(p=>selecionados.has(String(p.id)))&&!all.checked;}};
   const render=()=>{
     const q=norm($('#pb').value),f=$('#pf').value,vd=$('#pv')?$('#pv').value:'';
-    visiveis=PEDS.filter(p=>(!f||p.status===f)&&casaVendedor(p,vd)&&(!q||norm(p.cliente+' '+p.numero+' '+p.cidade).includes(q)));
+    visiveis=PEDS.filter(p=>(!f||situacaoVisivel(p.status)===f)&&casaVendedor(p,vd)&&(!q||norm(p.cliente+' '+p.numero+' '+p.cidade).includes(q)));
     {const val=visiveis.filter(p=>p.status!=='Cancelado');$('#presumo').innerHTML=visiveis.length?`<b>${visiveis.length}</b> pedido${visiveis.length===1?'':'s'} na lista · vendas (sem cancelados): <b class="num">${R$(val.reduce((t,p)=>t+(+p.total||0),0))}</b>`:'';}
-    $('#pt').innerHTML=visiveis.length?`<table class="t"><thead><tr><th><input type="checkbox" class="chk" id="pall" aria-label="Selecionar todos os pedidos exibidos"></th><th>Pedido</th><th>Data</th><th>Cliente</th><th>Cidade</th>${ME.papel!=='vendedor'?'<th>Vendedor</th>':''}<th>Situação</th><th class="r">Total</th><th>Ações</th></tr></thead><tbody>${visiveis.map(p=>`<tr class="click" data-id="${esc(p.id)}"><td><input type="checkbox" class="chk" data-pedido="${esc(p.id)}" aria-label="Selecionar pedido ${esc(p.numero)}" ${selecionados.has(String(p.id))?'checked':''}></td><td class="num"><b>#${esc(p.numero)}</b></td><td>${dth(p.data)}</td><td>${esc(p.cliente)}</td><td>${esc(p.cidade)}</td>${ME.papel!=='vendedor'?`<td>${esc(p.vendedor||'—')}</td>`:''}<td><select class="st-sel st-${esc(norm(p.status).replace(/[^a-z]/g,''))}" data-st="${esc(p.id)}" aria-label="Situação do pedido ${esc(p.numero)}">${STATUS_PED.filter(s=>s===p.status||!(OPER()&&s==='Cancelado')).map(s=>`<option ${s===p.status?'selected':''}>${esc(s)}</option>`).join('')}</select>${p.erroBling?' <span class="pill p-bad">Erro Bling</span>':''}</td><td class="r num">${R$(p.total)}</td><td><button class="btn o sm" data-ver="${esc(p.id)}">Ver</button>${pedEditavel(p)?` <button class="btn o sm" data-editar-pedido="${esc(p.id)}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum pedido encontrado</b>Mude a busca ou a situação.</div>';
+    $('#pt').innerHTML=visiveis.length?`<table class="t"><thead><tr><th><input type="checkbox" class="chk" id="pall" aria-label="Selecionar todos os pedidos exibidos"></th><th>Pedido</th><th>Data</th><th>Cliente</th><th>Cidade</th>${ME.papel!=='vendedor'?'<th>Vendedor</th>':''}<th>Situação</th><th class="r">Total</th><th>Ações</th></tr></thead><tbody>${visiveis.map(p=>`<tr class="click" data-id="${esc(p.id)}"><td><input type="checkbox" class="chk" data-pedido="${esc(p.id)}" aria-label="Selecionar pedido ${esc(p.numero)}" ${selecionados.has(String(p.id))?'checked':''}></td><td class="num"><b>#${esc(p.numero)}</b></td><td>${dth(p.data)}</td><td>${esc(p.cliente)}</td><td>${esc(p.cidade)}</td>${ME.papel!=='vendedor'?`<td>${esc(p.vendedor||'—')}</td>`:''}<td><select class="st-sel st-${esc(norm(situacaoVisivel(p.status)).replace(/[^a-z]/g,''))}" data-st="${esc(p.id)}" aria-label="Situação do pedido ${esc(p.numero)}" ${p.status==='Entregue'?'disabled':''}>${(STATUS_PED.includes(situacaoVisivel(p.status))?STATUS_PED:[situacaoVisivel(p.status),...STATUS_PED]).filter(s=>s===situacaoVisivel(p.status)||!(OPER()&&s==='Cancelado')).map(s=>`<option ${s===situacaoVisivel(p.status)?'selected':''}>${esc(s)}</option>`).join('')}</select>${p.erroBling?' <span class="pill p-bad">Erro Bling</span>':''}</td><td class="r num">${R$(p.total)}</td><td><button class="btn o sm" data-ver="${esc(p.id)}">Ver</button>${pedEditavel(p)?` <button class="btn o sm" data-editar-pedido="${esc(p.id)}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty"><b>Nenhum pedido encontrado</b>Mude a busca ou a situação.</div>';
     atualizarSelecao();
   };
   $('#pn').onclick=()=>{VIEW='novo';iniciarPainel();};$('#pb').oninput=render;$('#pf').onchange=render;if($('#pv'))$('#pv').onchange=render;
@@ -1427,10 +1429,12 @@ async function vPedidos(){
     if(er.length)modal(`<header><h3>Situação alterada em ${res.length-er.length} de ${res.length}</h3><button data-fechar>×</button></header><div class="body">${er.map(r=>`<div class="msg bad">#${esc(r.numero)}: ${esc(r.erro)}</div>`).join('')}</div>`);else toast(res.length+' pedido(s) agora em "'+status+'"');return res};
   $('#pstok').onclick=async()=>{const st=$('#pstl').value;if(!st){toast('Escolha a nova situação.');return}const ids=[...selecionados];
     if(st==='Cancelado'&&!confirm('Mudar '+ids.length+' pedido(s) para Cancelado? Para cancelar também no Bling, use "Excluir selecionados".'))return;
+    if(st==='Entregue'&&!confirm('Marcar '+ids.length+' pedido(s) como Entregue? Eles serão enviados ao Bling e não poderão mais ser alterados.'))return;
     $('#pstok').disabled=true;try{await mudarSit(ids,st);selecionados.clear();render()}catch(e){falha(e)}finally{$('#pstl').value=''}};
   $('#pt').addEventListener('change',async e=>{const s=e.target.closest('[data-st]');if(!s)return;const p=PEDS.find(x=>String(x.id)===s.dataset.st),ant=p.status;
-    if(s.value==='Cancelado'&&!confirm('Mudar o pedido #'+p.numero+' para Cancelado?')){s.value=ant;return}
-    s.disabled=true;try{const r=await mudarSit([s.dataset.st],s.value);if(!r[0].ok)s.value=ant;render()}catch(er){s.value=ant;falha(er)}finally{s.disabled=false}});
+    const antV=situacaoVisivel(ant);if(s.value==='Cancelado'&&!confirm('Mudar o pedido #'+p.numero+' para Cancelado?')){s.value=antV;return}
+    if(s.value==='Entregue'&&!confirm('Marcar o pedido #'+p.numero+' como Entregue? Ele será enviado ao Bling e não poderá mais ser alterado.')){s.value=antV;return}
+    s.disabled=true;try{const r=await mudarSit([s.dataset.st],s.value);if(!r[0].ok)s.value=antV;render()}catch(er){s.value=antV;falha(er)}finally{s.disabled=false}});
   if($('#pexcluir'))$('#pexcluir').onclick=()=>excluirPedidos(PEDS.filter(p=>selecionados.has(String(p.id))),()=>{selecionados.clear();vPedidos()});
   $('#pt').onchange=e=>{if(e.target.id==='pall'){visiveis.forEach(p=>e.target.checked?selecionados.add(String(p.id)):selecionados.delete(String(p.id)));render();}else if(e.target.dataset.pedido){e.target.checked?selecionados.add(e.target.dataset.pedido):selecionados.delete(e.target.dataset.pedido);atualizarSelecao();}};
   $('#pt').onclick=e=>{if(e.target.closest('input,select'))return;const ed=e.target.closest('[data-editar-pedido]'),tr=e.target.closest('tr[data-id]');if(!tr)return;const p=PEDS.find(p=>String(p.id)===tr.dataset.id);if(ed)editarPedido(p,vPedidos);else detalhePedido(p,true,vPedidos);};
@@ -1438,6 +1442,15 @@ async function vPedidos(){
 }
 
 
+/* ---- formas a prazo: boleto, faturado, carteira ou "N dias" pedem data de vencimento ---- */
+const diasPrazo=n=>{const m=String(n||'').match(/(\d+)\s*(dias|dia|dd|d)\b/i);return m?+m[1]:0};
+const formaAPrazo=f=>!!f&&(/boleto|faturad|carteira|prazo/i.test(f.nome||'')||diasPrazo(f.nome)>0);
+const hojeISO=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const vencPadrao=f=>{const d=new Date();d.setDate(d.getDate()+diasPrazo(f&&f.nome));return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const brData=s=>s?String(s).slice(0,10).split('-').reverse().join('/'):'';
+/* situações que a equipe escolhe; as antigas (Recebido, Faturado...) contam como Em separação */
+const SITUACOES=['Em separação','Entregue','Cancelado'];
+const situacaoVisivel=s=>SITUACOES.includes(s)||s==='Em rota'?s:'Em separação';
 /* ---- novo pedido (equipe) ---- */
 /* Montagem rápida de pedidos: cliente, busca, itens e resumo na mesma tela. */
 async function vNovo(pedido=null,onChange=null){
@@ -1445,14 +1458,16 @@ async function vNovo(pedido=null,onChange=null){
   const chave=(pedido?'dm_editar_pedido_'+pedido.id+'_':'dm_novo_pedido_')+ME.id;
   let draft;try{draft=JSON.parse(store.get(chave)||'null')}catch(e){}
   if(pedido&&draft&&(+draft.revisao||0)!==(+pedido.revisao||0))draft=null;
-  draft=draft||(pedido?{clienteId:String(pedido.clienteId),formaPagamentoId:pedido.formaPagamentoId||'',obs:pedido.obs||'',itens:pedido.itens.map(i=>({...i})),descontoTotal:+pedido.desconto||0,revisao:+pedido.revisao||0,enviado:false}:{clienteId:'',formaPagamentoId:'',obs:'',itens:[],enviado:false});
+  draft=draft||(pedido?{clienteId:String(pedido.clienteId),formaPagamentoId:pedido.formaPagamentoId||'',vencimento:pedido.vencimento||'',obs:pedido.obs||'',itens:pedido.itens.map(i=>({...i})),descontoTotal:+pedido.desconto||0,revisao:+pedido.revisao||0,enviado:false}:{clienteId:'',formaPagamentoId:'',obs:'',itens:[],enviado:false});
   draft.idEnvio=draft.idEnvio||crypto.randomUUID();draft.idOperacao=draft.idOperacao||crypto.randomUUID();
   let clientes=[],cliente=null,cat=null,formas=[],buscando=false,ocupado=false,selecionado=null,sugestoes=[],ativo=0,geracao=0;
   const gravar=()=>store.set(chave,JSON.stringify(draft));
+  const formaAtual=()=>formas.find(f=>String(f.id)===String(draft.formaPagamentoId));
+  function mostrarVenc(){const f=formaAtual(),prazo=formaAPrazo(f);el('#npvencwrap').hidden=!prazo;el('#npvenc').min=pedido?'':hojeISO();if(prazo){if(!draft.vencimento)draft.vencimento=vencPadrao(f);el('#npvenc').value=draft.vencimento;}else draft.vencimento='';}
   M().innerHTML=`<div class="ph"><div><h1>${pedido?'Editar pedido #'+esc(pedido.numero):'Novo pedido'}</h1><p>${pedido?'Ajuste os produtos e confira o resumo. As alterações ficam no App. O envio ao Bling ocorre após a entrega.':'Escolha o cliente, adicione os produtos e confira o resumo.'}</p></div><div class="toolbar"><button class="btn o sm" id="npvoltar">Voltar</button><button class="btn o sm" id="npsalvar">Salvar rascunho</button><button class="btn sm" id="npfinaltop" disabled>${pedido?'Salvar alterações':'Finalizar pedido'}</button></div></div>
     <div id="npaviso" role="status" aria-live="polite"></div>
     <section class="card np-cabecalho"><div id="npclientearea"><label class="np-label" for="npcliente">Cliente</label><div class="np-busca-wrap"><input class="inp" id="npcliente" placeholder="Digite o nome, documento ou cidade" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="npclientes"><div id="npclientes" class="np-sugestoes" hidden></div></div></div>
-      <div class="np-campos"><div class="field"><label>Tipo do pedido</label><div class="np-fixo">Pedido de venda</div></div><div class="field"><label for="nppagamento">Pagamento</label><select id="nppagamento" disabled><option value="">Selecione o cliente</option></select></div><div class="field"><label>Tabela de preço</label><div class="np-fixo" id="nptabela">Selecione o cliente</div></div><div class="field"><label>Estoque</label><div class="np-fixo">Estoque padrão</div></div></div>
+      <div class="np-campos"><div class="field"><label>Tipo do pedido</label><div class="np-fixo">Pedido de venda</div></div><div class="field"><label for="nppagamento">Forma de pagamento</label><select id="nppagamento" disabled><option value="">Selecione o cliente</option></select></div><div class="field" id="npvencwrap" hidden><label for="npvenc">Vencimento (a prazo)</label><input type="date" class="inp" id="npvenc"></div><div class="field"><label>Tabela de preço</label><div class="np-fixo" id="nptabela">Selecione o cliente</div></div><div class="field"><label>Estoque</label><div class="np-fixo">Estoque padrão</div></div></div>
     </section>
     <div class="np-layout"><div class="np-coluna"><section class="card np-itens"><div class="np-titulo"><h3>Itens do pedido</h3><button class="btn o sm" id="npcatalogo" disabled>Explorar catálogo</button></div>
       <label class="np-com-saldo"><input type="checkbox" id="npsaldo"> Apenas com saldo</label>
@@ -1463,7 +1478,7 @@ async function vNovo(pedido=null,onChange=null){
   const el=s=>$(s),fmt=v=>Number(v).toLocaleString('pt-BR',{maximumFractionDigits:3});
   function controles(){
     const pronto=!!cliente&&!!cat&&!buscando&&!ocupado&&!draft.enviado;
-    ['#npproduto','#npquantidade','#npcatalogo','#nppagamento','#npsaldo'].forEach(s=>el(s).disabled=!pronto);
+    ['#npproduto','#npquantidade','#npcatalogo','#nppagamento','#npsaldo','#npvenc'].forEach(s=>el(s).disabled=!pronto);
     el('#npadd').disabled=!pronto||!selecionado;el('#npfinalizar').disabled=!cliente||!cat||buscando||ocupado||!draft.itens.length;el('#npfinaltop').disabled=el('#npfinalizar').disabled;
     el('#npfinalizar').textContent=el('#npfinaltop').textContent=ocupado?'Aguarde…':draft.enviado?(pedido?'Verificar alteração':'Verificar envio'):(pedido?'Salvar alterações':'Finalizar pedido');
     ['#npvoltar','#npsalvar','#nprascunho'].forEach(s=>el(s).disabled=ocupado);el('#npobs').disabled=ocupado||draft.enviado;
@@ -1504,7 +1519,7 @@ async function vNovo(pedido=null,onChange=null){
     el('#npcliente').setAttribute('aria-expanded','true');
   }
   async function escolherCliente(c,restaurar=false){
-    const g=++geracao;cliente=c;cat=null;selecionado=null;buscando=true;draft.clienteId=String(c.id);if(!restaurar){draft.itens=[];draft.formaPagamentoId='';draft.enviado=false;}gravar();
+    const g=++geracao;cliente=c;cat=null;selecionado=null;buscando=true;draft.clienteId=String(c.id);if(!restaurar){draft.itens=[];draft.formaPagamentoId='';draft.vencimento='';draft.enviado=false;}gravar();
     el('#npclientearea').innerHTML=`<div class="np-cliente-selecionado"><span class="np-avatar">${esc((c.fantasia||c.nome).trim().slice(0,1).toUpperCase())}</span><div><b>${esc(c.fantasia||c.nome)}</b><small>${esc(c.documento||'')} · ${esc(c.cidade||'')}${c.uf?'/'+esc(c.uf):''}</small><small>${esc([c.endereco,c.numero,c.bairro].filter(Boolean).join(', '))}</small></div><button class="btn o sm" id="nptrocar">Trocar cliente</button></div>`;
     el('#nptrocar').onclick=()=>{if(ocupado||draft.enviado)return;const trocar=()=>{draft.clienteId='';draft.itens=[];draft.formaPagamentoId='';gravar();vNovo();};if(!draft.itens.length){trocar();return}const m=modal('<header><h3>Trocar cliente?</h3><button data-fechar>×</button></header><div class="body">Os produtos deste rascunho serão removidos para carregar a tabela e o frete do outro cliente.</div><footer><button class="btn o" data-fechar>Voltar</button><button class="btn" id="nptrocarok">Trocar cliente</button></footer>');m.querySelector('#nptrocarok').onclick=()=>{m.fechar();trocar();};};
     if(pedido)el('#nptrocar').hidden=true;
@@ -1522,7 +1537,7 @@ async function vNovo(pedido=null,onChange=null){
       const [catalogo]=await Promise.all([api('catalogoLoja',{clienteId:c.id}),carregarFotos()]);if(g!==geracao||!el('#npitens'))return;
       cat=catalogo;cat.produtos.forEach(p=>p.imagem=fotoProduto(p));
       let removidos=0;draft.itens=draft.itens.map(i=>{const antigo=pedido?.itens.find(p=>String(p.produtoId)===String(i.produtoId));const p=cat.produtos.find(p=>String(p.id)===String(i.produtoId))||antigo;if(!p){removidos++;return null}return {...i,nome:p.nome,codigo:p.codigo,unidade:p.unidade,preco:antigo?antigo.preco:(draft.enviado||(PP&&i.precoTabela!=null)?i.preco:p.preco),precoTabela:(cat.produtos.find(x=>String(x.id)===String(i.produtoId))||{}).preco??i.precoTabela??i.preco,imagem:p.imagem};}).filter(Boolean);if(removidos)toast('Alguns produtos do rascunho não estão mais disponíveis e foram removidos.');
-      el('#nppagamento').innerHTML='<option value="">Combinar na entrega</option>'+formas.map(f=>`<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join('');el('#nppagamento').value=draft.formaPagamentoId||'';if(!formas.some(f=>String(f.id)===String(draft.formaPagamentoId)))draft.formaPagamentoId='';
+      el('#nppagamento').innerHTML='<option value="">Combinar na entrega</option>'+formas.map(f=>`<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join('');el('#nppagamento').value=draft.formaPagamentoId||'';if(!formas.some(f=>String(f.id)===String(draft.formaPagamentoId)))draft.formaPagamentoId='';el('#nppagamento').value=draft.formaPagamentoId;mostrarVenc();
       el('#npaviso').innerHTML=draft.enviado?'<div class="msg info">A solicitação já foi enviada. Clique em Verificar para confirmar o resultado sem repetir o pedido.</div>':'';buscando=false;gravar();itens();if(!draft.enviado)el('#npproduto').focus();
     }catch(e){buscando=false;el('#npitens').innerHTML=`<div class="empty"><b>Não foi possível carregar os produtos</b>${esc(e.message)}<p><button class="btn o" id="nprecarregar">Tentar novamente</button></p></div>`;el('#nprecarregar').onclick=()=>escolherCliente(c,true);controles();}
   }
@@ -1566,7 +1581,7 @@ async function vNovo(pedido=null,onChange=null){
     el('#npdtr').onchange=()=>sincr('r');el('#npdtp').onchange=()=>sincr('p');}
   el('#npitens').oninput=e=>{if(e.target.dataset.npq===undefined||ocupado||draft.enviado)return;const n=+e.target.dataset.npq,q=estoqueValor(e.target.value);if(!Number.isFinite(q)||q<=0||q>1000000){e.target.setCustomValidity('Informe uma quantidade maior que zero.');return}e.target.setCustomValidity('');draft.itens[n].qtd=q;const t=el('[data-nptotal="'+n+'"]');if(t)t.textContent=R$(Math.round(q*draft.itens[n].preco*100)/100);gravar();totais();};
   el('#npitens').onclick=e=>{if(ocupado||draft.enviado)return;const b=e.target.closest('[data-npremover]');if(b){draft.itens.splice(+b.dataset.npremover,1);gravar();itens();}};
-  el('#nppagamento').onchange=()=>{draft.formaPagamentoId=el('#nppagamento').value;gravar();};el('#npobs').oninput=()=>{draft.obs=el('#npobs').value;gravar();};
+  el('#nppagamento').onchange=()=>{draft.formaPagamentoId=el('#nppagamento').value;draft.vencimento='';mostrarVenc();gravar();};el('#npvenc').onchange=()=>{draft.vencimento=el('#npvenc').value;gravar();};el('#npobs').oninput=()=>{draft.obs=el('#npobs').value;gravar();};
   const salvarRascunho=()=>{gravar();toast('Rascunho salvo. Você pode continuar depois neste navegador.');};el('#npsalvar').onclick=salvarRascunho;el('#nprascunho').onclick=salvarRascunho;
   el('#npvoltar').onclick=()=>{if(!ocupado){gravar();VIEW='pedidos';vPedidos();}};
   el('#npcatalogo').onclick=()=>{
@@ -1577,9 +1592,10 @@ async function vNovo(pedido=null,onChange=null){
     if(ocupado||!cliente||!cat||!draft.itens.length)return;
     if($$('#npitens input').some(e=>!e.checkValidity())){toast('Confira a quantidade dos produtos.');return}
     if(selecionado){toast('Adicione o produto selecionado antes de finalizar.');return}
+    if(formaAPrazo(formaAtual())&&!/^\d{4}-\d{2}-\d{2}$/.test(draft.vencimento||'')){toast('Informe a data de vencimento do pagamento a prazo.');el('#npvenc').focus();return}
     ocupado=true;draft.enviado=true;gravar();controles();el('#npfinalizar').textContent='Enviando pedido…';
     try{
-      const dados={idEnvio:draft.idEnvio,clienteId:cliente.id,itens:draft.itens.map(i=>PP?{produtoId:i.produtoId,qtd:i.qtd,preco:i.preco}:{produtoId:i.produtoId,qtd:i.qtd}),obs:draft.obs,formaPagamentoId:draft.formaPagamentoId};if(PP)dados.descontoTotal=+draft.descontoTotal||0;
+      const dados={idEnvio:draft.idEnvio,clienteId:cliente.id,itens:draft.itens.map(i=>PP?{produtoId:i.produtoId,qtd:i.qtd,preco:i.preco}:{produtoId:i.produtoId,qtd:i.qtd}),obs:draft.obs,formaPagamentoId:draft.formaPagamentoId,vencimento:formaAPrazo(formaAtual())?draft.vencimento:''};if(PP)dados.descontoTotal=+draft.descontoTotal||0;
       if(pedido){dados.id=pedido.id;dados.idOperacao=draft.idOperacao;dados.revisao=draft.revisao;}
       const r=await api(pedido?'editarPedido':'pedidoPainelEnviar',dados);
       store.del(chave);M().innerHTML=`<div class="ph"><div><h1>${pedido?'Pedido atualizado':'Pedido enviado'}</h1><p>Pedido #${esc(r.numero)} de ${esc(cliente.fantasia||cliente.nome)}</p></div></div><div class="card" style="padding:24px;display:flex;flex-direction:column;gap:16px"><div class="msg ok">Pedido #${esc(r.numero)} ${pedido?'atualizado':'recebido'} · ${R$(r.total)}</div><p>${pedido?(pedido.blingNumero?'A alteração foi confirmada no mesmo pedido do Bling.':'As alterações foram salvas no pedido.'):'Confira o pedido e a integração com o Bling na lista de Pedidos.'}</p><div class="toolbar"><button class="btn" id="npverpedidos">Ver pedidos</button><button class="btn o" id="npnovamente">Novo pedido</button></div></div>`;el('#npverpedidos').onclick=()=>vPedidos();el('#npnovamente').onclick=()=>vNovo();
